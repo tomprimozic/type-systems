@@ -1,0 +1,10 @@
+*.swp
+*.cmo
+*.cmi
+lexer.ml
+parser.mli
+parser.ml
+parser.output
+test
+oUnit-*.log
+oUnit-*.cache
