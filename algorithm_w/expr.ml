@@ -9,8 +9,6 @@ type expr =
 type id = int
 type level = int
 
-let generic_level = max_int
-
 type ty =
 	| TConst of name            (* type constant, e.g. `int` of `->` *)
 	| TApp of ty * ty list      (* type application *)
@@ -20,6 +18,7 @@ type ty =
 and tvar =
 	| Unbound of id * level
 	| Link of ty
+	| Generic of id
 
 
 
@@ -68,7 +67,7 @@ let string_of_ty ty =
 							"(" ^ param_ty_list_str ^ ") -> " ^ return_ty_str
 				in
 				if is_simple then "(" ^ arrow_ty_str ^ ")" else arrow_ty_str
-		| TVar {contents = Unbound(id, level)} when level = generic_level -> begin
+		| TVar {contents = Generic id} -> begin
 					try
 						Hashtbl.find id_name_map id
 					with Not_found ->

@@ -12,7 +12,7 @@ let reset_id () = current_id := 0
 
 
 let new_var level = TVar (ref (Unbound(next_id (), level)))
-let new_gen_var () = TVar (ref (Unbound(next_id (), generic_level)))
+let new_gen_var () = TVar (ref (Generic(next_id ())))
 
 
 exception Error of string
@@ -32,6 +32,7 @@ end
 let occurs_check_adjust_levels tvar_id tvar_level ty =
 	let rec f = function
 		| TVar {contents = Link ty} -> f ty
+		| TVar {contents = Generic _} -> assert false
 		| TVar ({contents = Unbound(other_id, other_level)} as other_tvar) ->
 				if other_id = tvar_id then
 					error "recursive types"
@@ -74,20 +75,20 @@ let rec unify ty1 ty2 =
 
 let rec generalize level = function
 	| TVar {contents = Unbound(id, other_level)} when other_level > level ->
-			TVar (ref (Unbound(id, generic_level)))
+			TVar (ref (Generic id))
 	| TApp(ty, ty_arg_list) ->
 			TApp(generalize level ty, List.map (generalize level) ty_arg_list)
 	| TArrow(param_ty_list, return_ty) ->
 			TArrow(List.map (generalize level) param_ty_list, generalize level return_ty)
 	| TVar {contents = Link ty} -> generalize level ty
-	| _ as ty -> ty
+	| TVar {contents = Generic _} | TVar {contents = Unbound _} | TConst _ as ty -> ty
 
 let instantiate level ty =
 	let id_var_map = Hashtbl.create 10 in
 	let rec f ty = match ty with
 		| TConst _ -> ty
 		| TVar {contents = Link ty} -> f ty
-		| TVar {contents = Unbound(id, other_level)} when other_level = generic_level -> begin
+		| TVar {contents = Generic id} -> begin
 				try
 					Hashtbl.find id_var_map id
 				with Not_found ->
