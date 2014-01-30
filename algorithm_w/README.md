@@ -12,12 +12,12 @@ close to linear time complexity (in terms of the size of the expression being ty
 Overview
 --------
 
-For a general description of Algorithm W, see the [Wikipedia article][1]. This implementation
+For a general description of Algorithm W, see the [Wikipedia article][wikipedia]. This implementation
 uses several optimizations over the naive implementation. Instead of explicit substitutions
 when unifying types, it uses updateable references. It also tags unbound type variables with
 levels or ranks to optimize generalizations of let bindings, a technique first described by
 Didier Rémy [1]. A very eloquent description of the ranked type variables algorithm and
-associated optimizations was written by [Oleg Kiselyov][2].
+associated optimizations was written by [Oleg Kiselyov][oleg].
 
 
 Details
@@ -72,8 +72,8 @@ of type links as we follow them, yet our `generalize` function takes care of tha
 References
 ----------
 
-[1]: Didier Rémy. Extending ML type system with a sorted equational theory. 1992
+[1] Didier Rémy. *Extending ML type system with a sorted equational theory.* 1992
 
 
-[1]: http://en.wikipedia.org/wiki/Hindley%E2%80%93Milner_type_system#Algorithm_W
-[2]: http://okmij.org/ftp/ML/generalization.html
+[wikipedia]: http://en.wikipedia.org/wiki/Hindley%E2%80%93Milner_type_system#Algorithm_W
+[oleg]: http://okmij.org/ftp/ML/generalization.html
