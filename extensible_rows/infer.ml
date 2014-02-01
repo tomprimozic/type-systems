@@ -47,7 +47,9 @@ let occurs_check_adjust_levels tvar_id tvar_level ty =
 		| TArrow(param_ty_list, return_ty) ->
 				List.iter f param_ty_list ;
 				f return_ty
-		| TConst _ -> ()
+		| TRecord row -> f row
+		| TRowExtend(label, field_ty, row) -> f field_ty ; f row
+		| TConst _ | TRowEmpty -> ()
 	in
 	f ty
 
@@ -69,7 +71,36 @@ let rec unify ty1 ty2 =
 		| ty, TVar ({contents = Unbound(id, level)} as tvar) ->
 				occurs_check_adjust_levels id level ty ;
 				tvar := Link ty
+		| TRecord row1, TRecord row2 -> unify row1 row2
+		| TRowEmpty, TRowEmpty -> ()
+		| TRowExtend(label1, field_ty1, rest_row1), (TRowExtend _ as row2) -> begin
+				let rest_row1_tvar_ref_option = match rest_row1 with
+					| TVar ({contents = Unbound _} as tvar_ref) -> Some tvar_ref
+					| _ -> None
+				in
+				let rest_row2 = rewrite_row row2 label1 field_ty1 in
+				begin match rest_row1_tvar_ref_option with
+					| Some {contents = Link _} -> error "recursive row types"
+					| _ -> ()
+				end ;
+				unify rest_row1 rest_row2
+			end
 		| _, _ -> error ("cannot unify types " ^ string_of_ty ty1 ^ " and " ^ string_of_ty ty2)
+
+and rewrite_row row2 label1 field_ty1 = match row2 with
+	| TRowEmpty -> error ("row does not contain label " ^ label1)
+	| TRowExtend(label2, field_ty2, rest_row2) when label2 = label1 ->
+			unify field_ty1 field_ty2 ;
+			rest_row2
+	| TRowExtend(label2, field_ty2, rest_row2) ->
+			TRowExtend(label2, field_ty2, rewrite_row rest_row2 label1 field_ty1)
+	| TVar {contents = Link row2} -> rewrite_row row2 label1 field_ty1
+	| TVar ({contents = Unbound(id, level)} as tvar) ->
+			let rest_row2 = new_var level in
+			let ty2 = TRowExtend(label1, field_ty1, rest_row2) in
+			tvar := Link ty2 ;
+			rest_row2
+	| _ -> error "row type expected"
 
 
 
@@ -81,7 +112,10 @@ let rec generalize level = function
 	| TArrow(param_ty_list, return_ty) ->
 			TArrow(List.map (generalize level) param_ty_list, generalize level return_ty)
 	| TVar {contents = Link ty} -> generalize level ty
-	| TVar {contents = Generic _} | TVar {contents = Unbound _} | TConst _ as ty -> ty
+	| TRecord row -> TRecord (generalize level row)
+	| TRowExtend(label, field_ty, row) ->
+			TRowExtend(label, generalize level field_ty, generalize level row)
+	| TVar {contents = Generic _} | TVar {contents = Unbound _} | TConst _ | TRowEmpty as ty -> ty
 
 let instantiate level ty =
 	let id_var_map = Hashtbl.create 10 in
@@ -101,6 +135,10 @@ let instantiate level ty =
 				TApp(f ty, List.map f ty_arg_list)
 		| TArrow(param_ty_list, return_ty) ->
 				TArrow(List.map f param_ty_list, f return_ty)
+		| TRecord row -> TRecord (f row)
+		| TRowEmpty -> ty
+		| TRowExtend(label, field_ty, row) ->
+				TRowExtend(label, f field_ty, f row)
 	in
 	f ty
 
@@ -152,4 +190,31 @@ let rec infer env level = function
 				(fun param_ty arg_expr -> unify param_ty (infer env level arg_expr))
 				param_ty_list arg_list
 			;
+			return_ty
+	| RecordEmpty -> TRecord TRowEmpty
+	| RecordSelect(record_expr, label) ->
+			(* inlined code for Call of function with type "forall r a. {r | label : a} -> a" *)
+			let rest_row_ty = new_var level in
+			let field_ty = new_var level in
+			let param_ty = TRecord (TRowExtend(label, field_ty, rest_row_ty)) in
+			let return_ty = field_ty in
+			unify param_ty (infer env level record_expr) ;
+			return_ty
+	| RecordRestrict(record_expr, label) ->
+			(* inlined code for Call of function with type "forall r a. {r | label : a} -> {r}" *)
+			let rest_row_ty = new_var level in
+			let field_ty = new_var level in
+			let param_ty = TRecord (TRowExtend(label, field_ty, rest_row_ty)) in
+			let return_ty = TRecord rest_row_ty in
+			unify param_ty (infer env level record_expr) ;
+			return_ty
+	| RecordExtend(label, expr, record_expr) ->
+			(* inlined code for Call of function with type "forall r a. a -> {r} -> {r | label : a}" *)
+			let rest_row_ty = new_var level in
+			let field_ty = new_var level in
+			let param1_ty = field_ty in
+			let param2_ty = TRecord rest_row_ty in
+			let return_ty = TRecord (TRowExtend(label, field_ty, rest_row_ty)) in
+			unify param1_ty (infer env level expr) ;
+			unify param2_ty (infer env level record_expr) ;
 			return_ty

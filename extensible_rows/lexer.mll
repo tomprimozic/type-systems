@@ -21,9 +21,15 @@ rule token = parse
 	| ')'     { RPAREN }
 	| '['     { LBRACKET }
 	| ']'     { RBRACKET }
+	| '{'     { LBRACE }
+	| '}'     { RBRACE }
 	| '='     { EQUALS }
 	| "->"    { ARROW }
 	| ','     { COMMA }
+	| '.'     { DOT }
+	| '-'     { MINUS }
+	| '|'     { PIPE }
+	| ':'     { COLON }
 	| eof     { EOF }
 	| _       { raise Error }
 
@@ -40,9 +46,15 @@ let string_of_token = function
 	| RPAREN -> ")"
 	| LBRACKET -> "["
 	| RBRACKET -> "]"
+	| LBRACE -> "{"
+	| RBRACE -> "}"
 	| EQUALS -> "="
 	| ARROW -> "->"
 	| COMMA -> ","
+	| DOT -> "."
+	| MINUS -> "-"
+	| PIPE -> "|"
+	| COLON -> ":"
 	| EOF -> "<eof>"
 
 }

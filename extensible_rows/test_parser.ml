@@ -23,6 +23,33 @@ let test_cases = [
 	("a = b", Fail);
 	("()", Fail);
 	("fun x, y -> y", Fail);
+
+	(* records *)
+	("{}", OK RecordEmpty);
+	("{ }", OK RecordEmpty);
+	("{", Fail);
+	("a.x", OK (RecordSelect(Var "a", "x")));
+	("{m - a}", OK (RecordRestrict(Var "m", "a")));
+	("{m - a", Fail);
+	("m - a", Fail);
+	("{a = x}", OK (RecordExtend("a", Var "x", RecordEmpty)));
+	("{a = x", Fail);
+	("{a=x, b = y}", OK (RecordExtend("a", Var "x", RecordExtend("b", Var "y", RecordEmpty))));
+	("{b = y ,a=x}", OK (RecordExtend("b", Var "y", RecordExtend("a", Var "x", RecordEmpty))));
+	("{a=x,h=w,d=y,b=q,g=z,c=t,e=s,f=r}",
+		OK (RecordExtend("a", Var "x", RecordExtend("h", Var "w", RecordExtend("d", Var "y",
+		RecordExtend("b", Var "q", RecordExtend("g", Var "z", RecordExtend("c", Var "t",
+    RecordExtend("e", Var "s", RecordExtend("f", Var "r", RecordEmpty))))))))));
+	("{a = x|m}", OK (RecordExtend ("a", Var "x", Var "m")));
+	("{a | m}", Fail);
+	("{ a = x, b = y | m}", OK (RecordExtend("a", Var "x", RecordExtend("b", Var "y", Var "m"))));
+	("{ a = x, b = y | {m - a} }",
+		OK (RecordExtend("a", Var "x", RecordExtend("b", Var "y", RecordRestrict(Var "m", "a")))));
+	("{ b = y | m - a }", Fail);
+	("let x = {a = f(x), b = y.b} in { a = fun z -> z | {x - a} }",
+		OK (Let("x", RecordExtend("a", Call(Var "f", [Var "x"]), RecordExtend("b",
+		RecordSelect(Var "y", "b"), RecordEmpty)), RecordExtend("a", Fun(["z"], Var "z"),
+		RecordRestrict(Var "x", "a")))));
 	]
 
 
@@ -39,7 +66,7 @@ let make_single_test_case (code, expected_result) =
 			with Parsing.Parse_error ->
 				Fail
 		in
-			assert_equal ~printer:string_of_result expected_result result
+		assert_equal ~printer:string_of_result expected_result result
 
 let suite =
 	"test_parser" >::: List.map make_single_test_case test_cases

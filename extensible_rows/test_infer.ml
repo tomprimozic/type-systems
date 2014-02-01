@@ -9,6 +9,7 @@ let fail = Fail None
 let error msg = Fail (Some msg)
 
 let test_cases = [
+	(* Hindley-Milner *)
 	("id", OK "forall[a] a -> a");
 	("one", OK "int");
 	("x", error "variable x not found");
@@ -55,6 +56,41 @@ let test_cases = [
 	("let const = fun x -> fun y -> x in const", OK "forall[a b] a -> b -> a");
 	("let apply = fun f x -> f(x) in apply", OK "forall[a b] (a -> b, a) -> b");
 	("let apply_curry = fun f -> fun x -> f(x) in apply_curry", OK "forall[a b] (a -> b) -> a -> b");
+
+	(* records *)
+	("{}", OK "{}");
+	("{}.x", fail);
+	("{a = one}", OK "{a : int}");
+	("{a = one, b = true}", OK "{a : int, b : bool}");
+	("{b = true, a = one}", OK "{b : bool, a : int}");
+	("{a = one, b = true}.a", OK "int");
+	("{a = one, b = true}.b", OK "bool");
+	("{a = one, b = true}.c", error "row does not contain label c");
+	("{f = fun x -> x}", OK "forall[a] {f : a -> a}");
+	("let r = {a = id, b = succ} in choose(r.a, r.b)", OK "int -> int");
+	("let r = {a = id, b = fun x -> x} in choose(r.a, r.b)", OK "forall[a] a -> a");
+	("choose({a = one}, {})", fail);
+	("{ x = zero | { y = one | {} } }", OK "{x : int, y : int}");
+	("choose({ x = zero | { y = one | {} } }, {x = one, y = zero})", OK "{x : int, y : int}");
+	("{{} - x}", fail);
+	("{{x = one, y = zero} - x}", OK "{y : int}");
+	("{ x = true | {x = one}}", OK "{x : bool, x : int}");
+	("let a = {} in {b = one | a}", OK "{b : int}");
+	("let a = {x = one} in {x = true | a}.x", OK "bool");
+	("let a = {x = one} in a.y", error "row does not contain label y");
+	("let a = {x = one} in {a - x}", OK "{}");
+	("let a = {x = one} in let b = {x = true | a} in {b - x}.x", OK "int");
+	("fun r -> {x = one | r}", OK "forall[r] {r} -> {x : int | r}");
+	("fun r -> r.x", OK "forall[r a] {x : a | r} -> a");
+	("let get_x = fun r -> r.x in get_x({y = one, x = zero})", OK "int");
+	("let get_x = fun r -> r.x in get_x({y = one, z = true})", error "row does not contain label x");
+	("fun r -> choose({x = zero | r}, {x = one | {}})", OK "{} -> {x : int}");
+	("fun r -> choose({x = zero | r}, {x = one})", OK "{} -> {x : int}");
+	("fun r -> choose({x = zero | r}, {x = one | r})", OK "forall[r] {r} -> {x : int | r}");
+	("fun r -> choose({x = zero | r}, {y = one | r})", error "recursive row types");
+	("let f = fun x -> x.t(one) in f({t = succ})", OK "int");
+	("let f = fun x -> x.t(one) in f({t = id})", OK "int");
+	("{x = one, x = true}", OK "{x : int, x : bool}");
 	]
 
 
@@ -83,7 +119,7 @@ let make_single_test_case (code, expected_result) =
 			with Infer.Error msg ->
 				Fail (Some msg)
 		in
-			assert_equal ~printer:string_of_result ~cmp:cmp_result expected_result result
+		assert_equal ~printer:string_of_result ~cmp:cmp_result expected_result result
 
 let suite =
 	"test_infer" >::: List.map make_single_test_case test_cases
