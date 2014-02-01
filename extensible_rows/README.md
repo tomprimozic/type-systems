@@ -63,10 +63,6 @@ proposals, summarized on [GHC wiki][3], include first-class labels, positive and
 ("lacks") predicates for records and even more general predicates such as "disjoint", and
 also include structural subtyping of records (as used for objects in OCaml and Go).
 
-References
-----------
-
-[1]: Didier Rémy. Extending ML type system with a sorted equational theory. 1992
 
 
 [1]: http://research.microsoft.com/apps/pubs/default.aspx?id=65409
