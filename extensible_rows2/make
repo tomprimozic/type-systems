@@ -1,0 +1,8 @@
+ocamlyacc parser.mly
+ocamllex lexer.mll
+
+ocamlfind ocamlc -linkpkg -g \
+	-o test \
+	-package oUnit \
+	expr.ml parser.mli infer.ml parser.ml lexer.ml core.ml \
+	test_lexer.ml test_parser.ml test_infer.ml test.ml
