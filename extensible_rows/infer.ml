@@ -193,7 +193,7 @@ let rec infer env level = function
 			return_ty
 	| RecordEmpty -> TRecord TRowEmpty
 	| RecordSelect(record_expr, label) ->
-			(* inlined code for Call of function with type "forall[r a] {label : a | r} -> a" *)
+			(* inlined code for Call of function with type "forall[a r] {label : a | r} -> a" *)
 			let rest_row_ty = new_var level in
 			let field_ty = new_var level in
 			let param_ty = TRecord (TRowExtend(label, field_ty, rest_row_ty)) in
@@ -201,7 +201,7 @@ let rec infer env level = function
 			unify param_ty (infer env level record_expr) ;
 			return_ty
 	| RecordRestrict(record_expr, label) ->
-			(* inlined code for Call of function with type "forall[r a] {label : a | r} -> {r}" *)
+			(* inlined code for Call of function with type "forall[a r] {label : a | r} -> {r}" *)
 			let rest_row_ty = new_var level in
 			let field_ty = new_var level in
 			let param_ty = TRecord (TRowExtend(label, field_ty, rest_row_ty)) in
@@ -209,7 +209,7 @@ let rec infer env level = function
 			unify param_ty (infer env level record_expr) ;
 			return_ty
 	| RecordExtend(label, expr, record_expr) ->
-			(* inlined code for Call of function with type "forall[r a] (a, {r}) -> {label : a | r}" *)
+			(* inlined code for Call of function with type "forall[a r] (a, {r}) -> {label : a | r}" *)
 			let rest_row_ty = new_var level in
 			let field_ty = new_var level in
 			let param1_ty = field_ty in

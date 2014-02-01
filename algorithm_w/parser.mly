@@ -54,10 +54,10 @@ expr:
 	| FUN ident_list ARROW expr           { Fun($2, $4) }
 
 simple_expr:
-	| IDENT                                       { Var $1 }
-	| LPAREN expr RPAREN                          { $2 }
-	| simple_expr LPAREN expr_comma_list RPAREN   { Call($1, $3) }
-	| simple_expr LPAREN RPAREN                   { Call($1, []) }
+	| IDENT                                             { Var $1 }
+	| LPAREN expr RPAREN                                { $2 }
+	| simple_expr LPAREN expr_comma_list RPAREN         { Call($1, $3) }
+	| simple_expr LPAREN RPAREN                         { Call($1, []) }
 
 ident_list:
 	| IDENT               { [$1] }
@@ -82,7 +82,6 @@ simple_ty:
 	| simple_ty LBRACKET ty_comma_list RBRACKET     { TApp($1, $3) }
 	| LPAREN ty RPAREN                              { $2 }
 	
-
 ty_comma_list:
 	| ty                        { [$1] }
 	| ty COMMA ty_comma_list    { $1 :: $3 }

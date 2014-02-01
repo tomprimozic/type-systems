@@ -9,6 +9,7 @@ let fail = Fail None
 let error msg = Fail (Some msg)
 
 let test_cases = [
+	(* Hindley-Milner *)
 	("id", OK "forall[a] a -> a");
 	("one", OK "int");
 	("x", error "variable x not found");
@@ -83,7 +84,7 @@ let make_single_test_case (code, expected_result) =
 			with Infer.Error msg ->
 				Fail (Some msg)
 		in
-			assert_equal ~printer:string_of_result ~cmp:cmp_result expected_result result
+		assert_equal ~printer:string_of_result ~cmp:cmp_result expected_result result
 
 let suite =
 	"test_infer" >::: List.map make_single_test_case test_cases

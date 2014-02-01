@@ -1,19 +1,19 @@
 type name = string
 
 type expr =
-	| Var of name                 (* variable *)
-	| Call of expr * expr list    (* application *)
-	| Fun of name list * expr     (* abstraction *)
-	| Let of name * expr * expr   (* let *)
+	| Var of name                           (* variable *)
+	| Call of expr * expr list              (* application *)
+	| Fun of name list * expr               (* abstraction *)
+	| Let of name * expr * expr             (* let *)
 
 type id = int
 type level = int
 
 type ty =
-	| TConst of name            (* type constant, e.g. `int` of `->` *)
-	| TApp of ty * ty list      (* type application *)
-	| TArrow of ty list * ty    (* function type `(int, int) -> int` *)
-	| TVar of tvar ref          (* type variable *)
+	| TConst of name                    (* type constant: `int` or `bool` *)
+	| TApp of ty * ty list              (* type application: `list[int]` *)
+	| TArrow of ty list * ty            (* function type: `(int, int) -> int` *)
+	| TVar of tvar ref                  (* type variable *)
 
 and tvar =
 	| Unbound of id * level
@@ -22,7 +22,7 @@ and tvar =
 
 
 
-let string_of_expr expr =
+let string_of_expr expr : string =
 	let rec f is_simple = function
 		| Var name -> name
 		| Call(fn_expr, arg_list) ->
@@ -40,7 +40,7 @@ let string_of_expr expr =
 	in
 	f false expr
 
-let string_of_ty ty =
+let string_of_ty ty : string =
 	let id_name_map = Hashtbl.create 10 in
 	let count = ref 0 in
 	let next_name () =

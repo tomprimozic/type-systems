@@ -39,7 +39,7 @@ let make_single_test_case (code, expected_result) =
 			with Parsing.Parse_error ->
 				Fail
 		in
-			assert_equal ~printer:string_of_result expected_result result
+		assert_equal ~printer:string_of_result expected_result result
 
 let suite =
 	"test_parser" >::: List.map make_single_test_case test_cases
