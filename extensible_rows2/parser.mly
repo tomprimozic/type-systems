@@ -4,15 +4,35 @@ open Expr
 open Infer
 
 
-let expr_record_extend label_expr_list record =
-	List.fold_left
-		(fun record (label, expr) -> RecordExtend(label, expr, record))
-		record label_expr_list
+let expr_record_extend (label_expr_list : (name * expr) list) rest_expr =
+	let label_expr_map =
+		List.fold_right
+			(fun ((label, expr) : string * expr) (label_expr_map : expr list LabelMap.t) ->
+				let expr_list =
+					try
+						expr :: (LabelMap.find label label_expr_map)
+					with Not_found ->
+						[expr]
+				in
+				LabelMap.add label expr_list label_expr_map)
+			label_expr_list LabelMap.empty
+	in
+	RecordExtend(label_expr_map, rest_expr)
 
-let ty_row_extend label_ty_list row =
-	List.fold_left
-		(fun row (label, ty) -> TRowExtend(label, ty, row))
-		row label_ty_list
+let ty_row_extend label_ty_list rest_ty =
+	let label_ty_map =
+		List.fold_right
+			(fun (label, ty) label_ty_map ->
+				let ty_list =
+					try
+						ty :: (LabelMap.find label label_ty_map)
+					with Not_found ->
+						[ty]
+				in
+				LabelMap.add label ty_list label_ty_map)
+			label_ty_list LabelMap.empty
+	in
+	TRowExtend(label_ty_map, rest_ty)
 
 let replace_ty_constants_with_vars var_name_list ty =
 	let env = List.fold_left
@@ -30,7 +50,8 @@ let replace_ty_constants_with_vars var_name_list ty =
 		| TArrow(param_ty_list, return_ty) -> TArrow(List.map f param_ty_list, f return_ty)
 		| TRecord row -> TRecord (f row)
 		| TRowEmpty -> ty
-		| TRowExtend(label, ty, row) -> TRowExtend(label, f ty, f row)
+		| TRowExtend(label_ty_map, row) ->
+				TRowExtend(LabelMap.map (List.map f) label_ty_map, f row)
 	in
 	f ty
 

@@ -1,12 +1,23 @@
 type name = string
 
+module LabelMap = Map.Make(
+	struct
+		type t = name
+		let compare label1 label2 =
+			let compare_length = compare (String.length label1) (String.length label2) in
+			if compare_length = 0 then
+				String.compare label1 label2
+			else compare_length
+	end)
+
 type expr =
 	| Var of name                           (* variable *)
 	| Call of expr * expr list              (* application *)
 	| Fun of name list * expr               (* abstraction *)
 	| Let of name * expr * expr             (* let *)
 	| RecordSelect of expr * name           (* selecting value of label: `r.a` *)
-	| RecordExtend of name * expr * expr    (* extending a record: `{a = 1 | r}` *)
+	| RecordExtend of (expr list) LabelMap.t * expr
+					(* extending a record: `{a = 1, b = 2 | r}` *)
 	| RecordRestrict of expr * name         (* deleting a label: `{r - a}` *)
 	| RecordEmpty                           (* empty record: `{}` *)
 
@@ -20,7 +31,8 @@ type ty =
 	| TVar of tvar ref                  (* type variable *)
 	| TRecord of row                    (* record type: `{<...>}` *)
 	| TRowEmpty                         (* empty row: `<>` *)
-	| TRowExtend of name * ty * row     (* row extension: `<a : _ | ...>` *)
+	| TRowExtend of (ty list) LabelMap.t * row
+					(* row extension: `<a : _ , b : _ | ...>` *)
 
 and row = ty    (* the kind of rows - empty row, row variable, or row extension *)
 
@@ -49,14 +61,20 @@ let string_of_expr expr : string =
 		| RecordEmpty -> "{}"
 		| RecordSelect(record_expr, label) -> f true record_expr ^ "." ^ label
 		| RecordRestrict(record_expr, label) -> "{" ^ f false record_expr ^ " - " ^ label ^ "}"
-		| RecordExtend(label, expr, record_expr) ->
-				let rec g str = function
-					| RecordEmpty -> str
-					| RecordExtend(label, expr, record_expr) ->
-							g (str ^ ", " ^ label ^ " = " ^ f false expr) record_expr
-					| other_expr -> str ^ " | " ^ f false other_expr
+		| RecordExtend(label_expr_map, rest_expr) ->
+				let label_expr_str =
+					String.concat ", "
+						(List.map
+							(fun (label, expr_list) ->
+								String.concat ", "
+									(List.map (fun expr -> label ^ " = " ^ f false expr) expr_list))
+							(LabelMap.bindings label_expr_map))
 				in
-				"{" ^ g (label ^ " = " ^ f false expr) record_expr ^ "}"
+				let rest_expr_str = match rest_expr with
+					| RecordEmpty -> ""
+					| expr -> " | " ^ f false expr
+				in
+				"{" ^ label_expr_str ^ rest_expr_str ^ "}"
 	in
 	f false expr
 
@@ -99,15 +117,23 @@ let string_of_ty ty : string =
 		| TVar {contents = Link ty} -> f is_simple ty
 		| TRecord row_ty -> "{" ^ f false row_ty ^ "}"
 		| TRowEmpty -> ""
-		| TRowExtend(label, ty, row_ty) ->
-				let rec g str = function
-					| TRowEmpty -> str
-					| TRowExtend(label, ty, row_ty) ->
-						g (str ^ ", " ^ label ^ " : " ^ f false ty) row_ty
-					| TVar {contents = Link ty} -> g str ty
-					| other_ty -> str ^ " | " ^ f false other_ty
+		| TRowExtend(label_ty_map, rest_ty) ->
+				let label_ty_str =
+					String.concat ", "
+						(List.map
+							(fun (label, ty_list) ->
+								String.concat ", "
+									(List.map (fun ty -> label ^ " : " ^ f false ty) ty_list))
+							(LabelMap.bindings label_ty_map))
 				in
-				g (label ^ " : " ^ f false ty) row_ty
+				let rec g = function
+					| TVar {contents = Link ty} -> g ty
+					| TRowEmpty -> ""
+					| TRowExtend _ -> raise (Failure "invalid type - tail of row cannot be another row")
+					| other_ty -> " | " ^ f false other_ty
+				in
+				let rest_ty_str = g rest_ty in
+				"{" ^ label_ty_str ^ rest_ty_str ^ "}"
 	in
 	let ty_str = f false ty in
 	if !count > 0 then

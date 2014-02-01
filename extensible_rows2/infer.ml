@@ -48,7 +48,7 @@ let occurs_check_adjust_levels tvar_id tvar_level ty =
 				List.iter f param_ty_list ;
 				f return_ty
 		| TRecord row -> f row
-		| TRowExtend(label, field_ty, row) -> f field_ty ; f row
+		| TRowExtend(label_ty_map, row) -> LabelMap.iter (List.iter f) label_ty_map ; f row
 		| TConst _ | TRowEmpty -> ()
 	in
 	f ty

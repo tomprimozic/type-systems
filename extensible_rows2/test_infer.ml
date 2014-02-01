@@ -91,6 +91,14 @@ let test_cases = [
 	("let f = fun x -> x.t(one) in f({t = succ})", OK "int");
 	("let f = fun x -> x.t(one) in f({t = id})", OK "int");
 	("{x = one, x = true}", OK "{x : int, x : bool}");
+
+	("let f = fun r -> let y = r.y in choose(r, {x = one, x = true}) in f",
+		error "row does not contain label y");
+	("fun r -> let y = choose(r.x, one) in let z = choose({r - x}.x, true) in r",
+		OK "forall[a r] {x : int, x : bool | r} -> {x : int, x : bool | r}");
+	("fun r -> choose({x = zero | r}, {x = one, x = true})", OK "{x : bool} -> {x : int, x : bool}");
+	("fun r -> choose(r, {x = one, x = true})", OK "{x : int, x : bool} -> {x : int, x : bool}");
+	("fun r -> choose({x = zero | r}, {x = true | r})", error "cannot unify types int and bool");
 	]
 
 
