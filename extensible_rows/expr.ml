@@ -6,7 +6,7 @@ type expr =
 	| Fun of name list * expr               (* abstraction *)
 	| Let of name * expr * expr             (* let *)
 	| RecordSelect of expr * name           (* selecting value of label: `r.a` *)
-	| RecordExtend of name * expr * expr    (* extending a record: `{a = 1, b = 2 | r}` *)
+	| RecordExtend of name * expr * expr    (* extending a record: `{a = 1 | r}` *)
 	| RecordRestrict of expr * name         (* deleting a label: `{r - a}` *)
 	| RecordEmpty                           (* empty record: `{}` *)
 
@@ -20,7 +20,7 @@ type ty =
 	| TVar of tvar ref                  (* type variable *)
 	| TRecord of row                    (* record type: `{<...>}` *)
 	| TRowEmpty                         (* empty row: `<>` *)
-	| TRowExtend of name * ty * row     (* row extension: `<a = _ | ...>` *)
+	| TRowExtend of name * ty * row     (* row extension: `<a : _ | ...>` *)
 
 and row = ty    (* the kind of rows - empty row, row variable, or row extension *)
 
