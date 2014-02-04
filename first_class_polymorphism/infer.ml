@@ -1,5 +1,7 @@
 open Expr
 
+module IntMap = Map.Make (struct type t = int let compare = compare end)
+module StringMap = Map.Make (String)
 
 let current_id = ref 0
 
@@ -13,6 +15,9 @@ let reset_id () = current_id := 0
 
 let new_var level = TVar (ref (Unbound(next_id (), level)))
 let new_gen_var () = TVar (ref (Generic(next_id ())))
+let new_bound_var () =
+	let id = next_id () in
+	id, TVar (ref (Bound id))
 
 
 exception Error of string
@@ -20,7 +25,6 @@ let error msg = raise (Error msg)
 
 
 module Env = struct
-	module StringMap = Map.Make (String)
 	type env = ty StringMap.t
 
 	let empty : env = StringMap.empty
@@ -29,10 +33,18 @@ module Env = struct
 end
 
 
+let int_map_from_2_lists key_list value_list =
+	List.fold_left2
+		(fun int_map key value -> IntMap.add key value int_map)
+		IntMap.empty key_list value_list
+
+
+
 let occurs_check_adjust_levels tvar_id tvar_level ty =
 	let rec f = function
 		| TVar {contents = Link ty} -> f ty
-		| TVar {contents = Generic _} -> assert false
+		| TVar {contents = Generic _} -> ()
+		| TVar {contents = Bound _} -> assert false
 		| TVar ({contents = Unbound(other_id, other_level)} as other_tvar) ->
 				if other_id = tvar_id then
 					error "recursive types"
@@ -47,9 +59,56 @@ let occurs_check_adjust_levels tvar_id tvar_level ty =
 		| TArrow(param_ty_list, return_ty) ->
 				List.iter f param_ty_list ;
 				f return_ty
+		| TForall(_, ty) -> f ty
 		| TConst _ -> ()
 	in
 	f ty
+
+
+
+let rec replace_bound_vars id_ty_map ty =
+	let rec f = function
+		| TConst _ as ty -> ty
+		| TVar {contents = Link ty} -> f ty
+		| TVar {contents = Bound id} as ty -> begin
+				try
+					IntMap.find id id_ty_map
+				with Not_found -> ty
+			end
+		| TVar _ as ty -> ty
+		| TApp(ty, ty_arg_list) ->
+				TApp(f ty, List.map f ty_arg_list)
+		| TArrow(param_ty_list, return_ty) ->
+				TArrow(List.map f param_ty_list, f return_ty)
+		| TForall(var_id_list, ty) ->
+				TForall(var_id_list,
+					replace_bound_vars
+						(List.fold_left
+							(fun id_ty_map var_id -> IntMap.remove var_id id_ty_map)
+							id_ty_map var_id_list)
+						ty)
+	in
+	f ty
+
+let free_generic_vars ty =
+	let hash_set = Hashtbl.create 12 in
+	let rec f = function
+		| TConst _ -> ()
+		| TVar {contents = Link ty} -> f ty
+		| TVar {contents = Bound _ } -> ()
+		| TVar {contents = Generic _ } as ty ->
+				Hashtbl.replace hash_set ty None
+		| TVar {contents = Unbound _} -> ()
+		| TApp(ty, ty_arg_list) ->
+				f ty ;
+				List.iter f ty_arg_list
+		| TArrow(param_ty_list, return_ty) ->
+				List.iter f param_ty_list ;
+				f return_ty
+		| TForall(_, ty) -> f ty
+	in
+	f ty ;
+	hash_set
 
 
 let rec unify ty1 ty2 =
@@ -63,15 +122,38 @@ let rec unify ty1 ty2 =
 				List.iter2 unify param_ty_list1 param_ty_list2 ;
 				unify return_ty1 return_ty2
 		| TVar {contents = Link ty1}, ty2 | ty1, TVar {contents = Link ty2} -> unify ty1 ty2
-		| TVar {contents = Unbound(id1, _)}, TVar {contents = Unbound(id2, _)} when id1 = id2 ->
+		| TVar {contents = Unbound(id1, _)}, TVar {contents = Unbound(id2, _)}
+		| TVar {contents = Generic id1}, TVar {contents = Generic id2} when id1 = id2 ->
 				assert false (* There is only a single instance of a particular type variable. *)
+		| TVar {contents = Bound _}, _ | _, TVar {contents = Bound _} ->
+				assert false (* bound vars should have been instantiated *)
 		| TVar ({contents = Unbound(id, level)} as tvar), ty
 		| ty, TVar ({contents = Unbound(id, level)} as tvar) ->
 				occurs_check_adjust_levels id level ty ;
 				tvar := Link ty
+		| (TForall(var_id_list1, ty1) as forall_ty1), (TForall(var_id_list2, ty2) as forall_ty2) ->
+				let generic_var_list = List.rev_map (fun _ -> new_gen_var ()) var_id_list2 in
+				let id_ty_map1 = int_map_from_2_lists var_id_list1 generic_var_list in
+				let id_ty_map2 = int_map_from_2_lists var_id_list2 generic_var_list in
+				let generic_ty1 = replace_bound_vars id_ty_map1 ty1 in
+				let generic_ty2 = replace_bound_vars id_ty_map2 ty2 in
+				unify generic_ty1 generic_ty2 ;
+				(* escape check *)
+				let free_var_set1 = free_generic_vars forall_ty1 in
+				let free_var_set2 = free_generic_vars forall_ty2 in
+				if
+					List.exists
+						(fun generic_var ->
+							Hashtbl.mem free_var_set1 generic_var || Hashtbl.mem free_var_set2 generic_var)
+						generic_var_list
+				then
+					error ("cannot unify types " ^ string_of_ty forall_ty1 ^ " and " ^ string_of_ty forall_ty2)
+				else
+					()
 		| _, _ -> error ("cannot unify types " ^ string_of_ty ty1 ^ " and " ^ string_of_ty ty2)
 
 
+(*
 
 let rec generalize level = function
 	| TVar {contents = Unbound(id, other_level)} when other_level > level ->
@@ -153,3 +235,5 @@ let rec infer env level = function
 				param_ty_list arg_list
 			;
 			return_ty
+
+*)

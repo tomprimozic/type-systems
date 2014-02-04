@@ -1,7 +1,7 @@
 open Expr
 open Infer
 
-
+(*
 
 let core =
 	let core_ref = ref Env.empty in
@@ -39,3 +39,5 @@ let core =
 	assume "choose_curry" "forall[a] a -> a -> a" ;
 
 	!core_ref
+
+*)

@@ -9,9 +9,10 @@ type result =
 let test_cases = [
 	("", OK []);
 	("  \t\n\n\t\r\n\r", OK []);
-	("())in,let_ _1Ma->==",
-		OK [LPAREN; RPAREN; RPAREN; IN; COMMA; IDENT "let_"; IDENT "_1Ma"; ARROW; EQUALS; EQUALS]);
-	("let fun in", OK [LET; FUN; IN]);
+	("())in,:][let_ _1Ma->==",
+		OK [LPAREN; RPAREN; RPAREN; IN; COMMA; COLON; RBRACKET; LBRACKET;
+		    IDENT "let_"; IDENT "_1Ma"; ARROW; EQUALS; EQUALS]);
+	("let fun in forall some", OK [LET; FUN; IN; FORALL; SOME]);
 	(";", Fail);
 	]
 
