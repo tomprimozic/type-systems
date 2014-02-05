@@ -153,40 +153,67 @@ let rec unify ty1 ty2 =
 		| _, _ -> error ("cannot unify types " ^ string_of_ty ty1 ^ " and " ^ string_of_ty ty2)
 
 
-(*
+let rec instantiate level = function
+	| TForall(var_id_list, ty) ->
+			let var_list = List.rev_map (fun _ -> new_var level) var_id_list in
+			let id_ty_map = int_map_from_2_lists var_id_list var_list in
+			replace_bound_vars id_ty_map ty
+	| TVar {contents = Link ty} -> instantiate level ty
+	| ty -> ty
 
-let rec generalize level = function
-	| TVar {contents = Unbound(id, other_level)} when other_level > level ->
-			TVar (ref (Generic id))
-	| TApp(ty, ty_arg_list) ->
-			TApp(generalize level ty, List.map (generalize level) ty_arg_list)
-	| TArrow(param_ty_list, return_ty) ->
-			TArrow(List.map (generalize level) param_ty_list, generalize level return_ty)
-	| TVar {contents = Link ty} -> generalize level ty
-	| TVar {contents = Generic _} | TVar {contents = Unbound _} | TConst _ as ty -> ty
 
-let instantiate level ty =
-	let id_var_map = Hashtbl.create 10 in
-	let rec f ty = match ty with
-		| TConst _ -> ty
+let subsume level ty1 ty2 =
+	let instantiated_ty2 = instantiate level ty2 in
+	match ty1 with
+		| TForall(var_id_list1, ty1) as forall_ty1 ->
+					let generic_var_list = List.rev_map (fun _ -> new_gen_var ()) var_id_list1 in
+					let id_ty_map1 = int_map_from_2_lists var_id_list1 generic_var_list in
+					let generic_ty1 = replace_bound_vars id_ty_map1 ty1 in
+					unify generic_ty1 instantiated_ty2 ;
+					(* escape check *)
+					let free_var_set1 = free_generic_vars forall_ty1 in
+					if
+						List.exists
+							(fun generic_var ->
+								Hashtbl.mem free_var_set1 generic_var)
+							generic_var_list
+					then
+						error ("type " ^ string_of_ty forall_ty1 ^ " is not an instance of " ^ string_of_ty ty2)
+					else
+						()
+		| _ -> unify ty1 instantiated_ty2
+
+
+let generalize level ty =
+	let var_id_list_rev_ref = ref [] in
+	let rec f = function
 		| TVar {contents = Link ty} -> f ty
-		| TVar {contents = Generic id} -> begin
-				try
-					Hashtbl.find id_var_map id
-				with Not_found ->
-					let var = new_var level in
-					Hashtbl.add id_var_map id var ;
-					var
-			end
-		| TVar {contents = Unbound _} -> ty
+		| TVar {contents = Generic _} -> print_endline "generic in generalize" ; ()
+		| TVar {contents = Bound _} -> print_endline "bound in generalize" ; ()
+		| TVar ({contents = Unbound(other_id, other_level)} as other_tvar) when other_level > level ->
+				other_tvar := Bound(other_id) ;
+				if not (List.mem other_id !var_id_list_rev_ref) then
+					var_id_list_rev_ref := other_id :: !var_id_list_rev_ref
+				else
+					()
+		| TVar {contents = Unbound _} -> ()
 		| TApp(ty, ty_arg_list) ->
-				TApp(f ty, List.map f ty_arg_list)
+				f ty ;
+				List.iter f ty_arg_list
 		| TArrow(param_ty_list, return_ty) ->
-				TArrow(List.map f param_ty_list, f return_ty)
+				List.iter f param_ty_list ;
+				f return_ty
+		| TForall(_, ty) -> f ty
+		| TConst _ -> ()
 	in
-	f ty
+	f ty ;
+	match !var_id_list_rev_ref with
+		| [] -> ty
+		| var_id_list_rev -> TForall(List.rev var_id_list_rev, ty)
 
 
+
+(*
 let rec match_fun_ty num_params = function
 	| TArrow(param_ty_list, return_ty) ->
 			if List.length param_ty_list <> num_params then
