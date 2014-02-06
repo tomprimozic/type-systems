@@ -43,8 +43,7 @@ let int_map_from_2_lists key_list value_list =
 let occurs_check_adjust_levels tvar_id tvar_level ty =
 	let rec f = function
 		| TVar {contents = Link ty} -> f ty
-		| TVar {contents = Generic _} -> ()
-		| TVar {contents = Bound _} -> assert false
+		| TVar {contents = Generic _} | TVar {contents = Bound _} -> ()
 		| TVar ({contents = Unbound(other_id, other_level)} as other_tvar) ->
 				if other_id = tvar_id then
 					error "recursive types"
@@ -189,7 +188,7 @@ let generalize level ty =
 	let rec f = function
 		| TVar {contents = Link ty} -> f ty
 		| TVar {contents = Generic _} -> print_endline "generic in generalize" ; ()
-		| TVar {contents = Bound _} -> print_endline "bound in generalize" ; ()
+		| TVar {contents = Bound _} -> ()
 		| TVar ({contents = Unbound(other_id, other_level)} as other_tvar) when other_level > level ->
 				other_tvar := Bound(other_id) ;
 				if not (List.mem other_id !var_id_list_rev_ref) then
@@ -213,7 +212,6 @@ let generalize level ty =
 
 
 
-(*
 let rec match_fun_ty num_params = function
 	| TArrow(param_ty_list, return_ty) ->
 			if List.length param_ty_list <> num_params then
@@ -235,32 +233,52 @@ let rec match_fun_ty num_params = function
 	| _ -> error "expected a function"
 
 
+let rec is_monomorphic = function
+	| TForall _ -> true
+	| TVar {contents = Link ty} -> is_monomorphic ty
+	| _ -> false
+
+
 let rec infer env level = function
 	| Var name -> begin
 			try
-				instantiate level (Env.lookup env name)
+				Env.lookup env name
 			with Not_found -> error ("variable " ^ name ^ " not found")
 		end
 	| Fun(param_list, body_expr) ->
-			let param_ty_list = List.map (fun _ -> new_var level) param_list in
-			let fn_env = List.fold_left2
-				(fun env param_name param_ty -> Env.extend env param_name param_ty)
-				env param_list param_ty_list
+			let fn_env_ref = ref env in
+			let var_list_ref = ref [] in
+			let param_ty_list = List.map
+				(fun (param_name, maybe_param_ty_ann) ->
+					let param_ty = match maybe_param_ty_ann with
+						| None ->
+								let var = new_var (level + 1) in
+								var_list_ref := var :: !var_list_ref ;
+								var
+						| Some (var_id_list, ty) ->
+								let var_list = List.rev_map (fun _ -> new_var (level + 1)) var_id_list in
+								let id_ty_map = int_map_from_2_lists var_id_list var_list in
+								var_list_ref := var_list @ !var_list_ref ;
+								replace_bound_vars id_ty_map ty
+					in
+					fn_env_ref := Env.extend !fn_env_ref param_name param_ty ;
+					param_ty) param_list
 			in
-			let return_ty = infer fn_env level body_expr in
-			TArrow(param_ty_list, return_ty)
+			let return_ty = infer !fn_env_ref (level + 1) body_expr in
+			let instantiated_return_ty = instantiate (level + 1) return_ty in
+			if List.exists is_monomorphic !var_list_ref then
+				error "polymorphic parameter inferred"
+			else
+				generalize level (TArrow(param_ty_list, instantiated_return_ty))
 	| Let(var_name, value_expr, body_expr) ->
 			let var_ty = infer env (level + 1) value_expr in
-			let generalized_ty = generalize level var_ty in
-			infer (Env.extend env var_name generalized_ty) level body_expr
+			infer (Env.extend env var_name var_ty) level body_expr
 	| Call(fn_expr, arg_list) ->
-			let param_ty_list, return_ty =
-				match_fun_ty (List.length arg_list) (infer env level fn_expr)
-			in
+			let fn_ty = instantiate (level + 1) (infer env (level + 1) fn_expr) in
+			let param_ty_list, return_ty = match_fun_ty (List.length arg_list) fn_ty in
 			List.iter2
-				(fun param_ty arg_expr -> unify param_ty (infer env level arg_expr))
-				param_ty_list arg_list
-			;
-			return_ty
+				(fun param_ty arg_expr -> subsume (level + 1) param_ty (infer env (level + 1) arg_expr))
+				param_ty_list arg_list ;
+			generalize level return_ty
+	| Ann _ -> error "not implemented"
 
-*)
