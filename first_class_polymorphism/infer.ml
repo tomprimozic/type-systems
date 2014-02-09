@@ -163,24 +163,44 @@ let rec instantiate level = function
 
 let subsume level ty1 ty2 =
 	let instantiated_ty2 = instantiate level ty2 in
-	match ty1 with
+	let rec f = function
 		| TForall(var_id_list1, ty1) as forall_ty1 ->
-					let generic_var_list = List.rev_map (fun _ -> new_gen_var ()) var_id_list1 in
-					let id_ty_map1 = int_map_from_2_lists var_id_list1 generic_var_list in
-					let generic_ty1 = replace_bound_vars id_ty_map1 ty1 in
-					unify generic_ty1 instantiated_ty2 ;
-					(* escape check *)
-					let free_var_set1 = free_generic_vars forall_ty1 in
-					if
-						List.exists
-							(fun generic_var ->
-								Hashtbl.mem free_var_set1 generic_var)
-							generic_var_list
-					then
-						error ("type " ^ string_of_ty forall_ty1 ^ " is not an instance of " ^ string_of_ty ty2)
-					else
-						()
+				let generic_var_list = List.rev_map (fun _ -> new_gen_var ()) var_id_list1 in
+				let id_ty_map1 = int_map_from_2_lists var_id_list1 generic_var_list in
+				let generic_ty1 = replace_bound_vars id_ty_map1 ty1 in
+				unify generic_ty1 instantiated_ty2 ;
+				(* escape check *)
+				let free_var_set1 = free_generic_vars forall_ty1 in
+				let free_var_set2 = free_generic_vars ty2 in
+				if
+					List.exists
+						(fun generic_var ->
+							Hashtbl.mem free_var_set1 generic_var || Hashtbl.mem free_var_set2 generic_var)
+						generic_var_list
+				then
+					error ("type " ^ string_of_ty ty2 ^ " is not an instance of " ^ string_of_ty forall_ty1)
+				else
+					()
+		| TVar {contents = Link ty} -> f ty
 		| _ -> unify ty1 instantiated_ty2
+	in
+	f ty1
+
+
+
+let subsume_n level ty_list1 ty_list2 =
+	let pair_list = List.combine ty_list1 ty_list2 in
+	let sorted_pair_list = List.fast_sort
+		(fun (ty1, _) (ty2, _) -> match (ty1, ty2) with
+			| TVar {contents = Unbound _}, TVar {contents = Unbound _} -> 0
+			| TVar {contents = Unbound _}, _ -> 1
+			| _, TVar {contents = Unbound _} -> -1
+			| _, _ ->  0)
+		pair_list
+	in
+	List.iter (fun (ty1, ty2) -> subsume level ty1 ty2) sorted_pair_list
+
+
 
 
 let generalize level ty =
@@ -234,9 +254,14 @@ let rec match_fun_ty num_params = function
 
 
 let rec is_monomorphic = function
-	| TForall _ -> true
+	| TForall _ -> false
+	| TConst _ -> true
 	| TVar {contents = Link ty} -> is_monomorphic ty
-	| _ -> false
+	| TVar _ -> true
+	| TApp (ty, ty_arg_list) ->
+			is_monomorphic ty && List.for_all is_monomorphic ty_arg_list
+	| TArrow(param_ty_list, return_ty) ->
+			List.for_all is_monomorphic param_ty_list && is_monomorphic return_ty
 
 
 let rec infer env level = function
@@ -266,8 +291,8 @@ let rec infer env level = function
 			in
 			let return_ty = infer !fn_env_ref (level + 1) body_expr in
 			let instantiated_return_ty = instantiate (level + 1) return_ty in
-			if List.exists is_monomorphic !var_list_ref then
-				error "polymorphic parameter inferred"
+			if not (List.for_all is_monomorphic !var_list_ref) then
+				error ("polymorphic parameter inferred: [" ^ String.concat ", " (List.map string_of_ty !var_list_ref) ^ "]")
 			else
 				generalize level (TArrow(param_ty_list, instantiated_return_ty))
 	| Let(var_name, value_expr, body_expr) ->
@@ -276,9 +301,8 @@ let rec infer env level = function
 	| Call(fn_expr, arg_list) ->
 			let fn_ty = instantiate (level + 1) (infer env (level + 1) fn_expr) in
 			let param_ty_list, return_ty = match_fun_ty (List.length arg_list) fn_ty in
-			List.iter2
-				(fun param_ty arg_expr -> subsume (level + 1) param_ty (infer env (level + 1) arg_expr))
-				param_ty_list arg_list ;
+			let arg_ty_list = List.map (infer env (level + 1)) arg_list in
+			subsume_n (level + 1) param_ty_list arg_ty_list ;
 			generalize level return_ty
-	| Ann _ -> error "not implemented"
+	| Ann(expr, ty_ann) -> infer env level (Call(Fun(["a", Some ty_ann], Var "a"), [expr]))
 

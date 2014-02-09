@@ -14,7 +14,7 @@ let core =
 			"one : int" ;
 			"zero : int" ;
 			"succ : int -> int" ;
-			"plus : (int, int) -> inc" ;
+			"plus : (int, int) -> int" ;
 			"eq : forall[a] (a, a) -> bool" ;
 			"eq_curry : forall[a] a -> a -> bool" ;
 			"not : bool -> bool" ;
@@ -28,9 +28,12 @@ let core =
 			"const : forall[a b] a -> b -> a" ;
 			"apply : forall[a b] (a -> b, a) -> b" ;
 			"apply_curry : forall[a b] (a -> b) -> a -> b" ;
+			"rev_apply : forall[a b] (a, a -> b) -> b" ;
+			"rev_apply_curry : forall[a b] a -> (a -> b) -> b" ;
 			"choose : forall[a] (a, a) -> a" ;
 			"choose_curry : forall[a] a -> a -> a" ;
 			"ids : list[forall[a] a -> a]" ;
+			"poly : (forall[a] a -> a) -> pair[int, bool]" ;
 		]
 	in
 	List.fold_left

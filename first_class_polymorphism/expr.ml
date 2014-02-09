@@ -68,7 +68,7 @@ let string_of_ty_with_bound_tvars name_map ty =
 				ty_str ^ "[" ^ ty_arg_list_str ^ "]"
 		| TVar {contents = Unbound(id, _)} -> "@unknown" ^ string_of_int id
 		| TVar {contents = Bound id} -> IntMap.find id name_map
-		| TVar {contents = Generic id} -> "@unknown" ^ string_of_int id
+		| TVar {contents = Generic id} -> "@generic" ^ string_of_int id
 		| TVar {contents = Link ty} -> simple name_map ty
 		| ty -> "(" ^ complex name_map ty ^ ")"
 	in

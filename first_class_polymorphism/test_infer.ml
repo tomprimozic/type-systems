@@ -56,16 +56,26 @@ let test_cases = [
 	("let apply_curry = fun f -> fun x -> f(x) in apply_curry", OK "forall[a b] (a -> b) -> a -> b");
 
 	(* HMF *)
-	("ids", OK "list[forall[a] a -> a]") ;
-	("fun (f : forall[a] a -> a) -> pair(f(one), f(true))",
-		OK "(forall[a] a -> a) -> pair[int, bool]") ;
-	("cons(ids, nil)", OK "list[list[forall[a] a -> a]]") ;
-	("choose(nil, ids)", OK "list[forall[a] a -> a]") ;
-	("choose(ids, nil)", OK "list[forall[a] a -> a]") ;
-	("cons(fun x -> x, ids)", OK "list[forall[a] a -> a]") ;
-	("let rev_cons = fun x y -> cons(y, x) in rev_cons(ids, id)", OK "list[forall[a] a -> a]") ;
-	("cons(id, ids)", OK "list[forall[a] a -> a]") ;
-	("cons(id, cons(succ, nil))", OK "list[int -> int]") ;
+	("ids", OK "list[forall[a] a -> a]");
+	("let poly = fun f -> pair(f(one), f(true)) in poly", fail);
+	("let poly = fun (f : forall[a] a -> a) -> pair(f(one), f(true)) in poly",
+		OK "(forall[a] a -> a) -> pair[int, bool]");
+	("cons(ids, nil)", OK "list[list[forall[a] a -> a]]");
+	("choose(nil, ids)", OK "list[forall[a] a -> a]");
+	("choose(ids, nil)", OK "list[forall[a] a -> a]");
+	("cons(fun x -> x, ids)", OK "list[forall[a] a -> a]");
+	("let rev_cons = fun x y -> cons(y, x) in rev_cons(ids, id)", OK "list[forall[a] a -> a]");
+	("cons(id, ids)", OK "list[forall[a] a -> a]");
+	("cons(id, cons(succ, nil))", OK "list[int -> int]");
+	("poly(id)", OK "pair[int, bool]");
+	("poly(fun x -> x)", OK "pair[int, bool]");
+	("poly(succ)", fail);
+	("apply(succ, one)", OK "int");
+	("rev_apply(one, succ)", OK "int");
+	("apply(poly, id)", OK "pair[int, bool]");
+	("apply_curry(poly)(id)", OK "pair[int, bool]");
+	("rev_apply(id, poly)", OK "pair[int, bool]");
+	("rev_apply_curry(id)(poly)", fail);
 	]
 
 
