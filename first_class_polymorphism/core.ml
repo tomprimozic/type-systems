@@ -7,6 +7,7 @@ let core =
 			"head : forall[a] list[a] -> a" ;
 			"tail : forall[a] list[a] -> list[a]" ;
 			"nil : forall[a] list[a]" ;
+			"single : forall[a] a -> list[a]" ;
 			"cons : forall[a] (a, list[a]) -> list[a]" ;
 			"cons_curry : forall[a] a -> list[a] -> list[a]" ;
 			"map : forall[a b] (a -> b, list[a]) -> list[b]" ;

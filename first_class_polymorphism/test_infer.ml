@@ -32,7 +32,7 @@ let test_cases = [
 	("choose(fun x y -> x, fun x y -> y)", OK "forall[a] (a, a) -> a");
 	("choose_curry(fun x y -> x)(fun x y -> y)", OK "forall[a] (a, a) -> a");
 	("let x = id in let y = let z = x(id) in z in y", OK "forall[a] a -> a");
-	("cons(id, nil)", OK "forall[a] list[a -> a]");
+	("single(id)", OK "forall[a] list[a -> a]");
 	("cons_curry(id)(nil)", OK "forall[a] list[a -> a]");
 	("let lst1 = cons(id, nil) in let lst2 = cons(succ, lst1) in lst2", OK "list[int -> int]");
 	("cons_curry(id)(cons_curry(succ)(cons_curry(id)(nil)))", OK "list[int -> int]");
@@ -76,6 +76,8 @@ let test_cases = [
 	("apply_curry(poly)(id)", OK "pair[int, bool]");
 	("rev_apply(id, poly)", OK "pair[int, bool]");
 	("rev_apply_curry(id)(poly)", fail);
+	("(id : forall[a] a -> a) : int -> int", OK "int -> int");
+	("single(id : forall[a] a -> a)", OK "list[forall[a] a -> a]");
 	]
 
 

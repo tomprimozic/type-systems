@@ -16,6 +16,23 @@ and tvar =
 	| Generic of id
 	| Bound of id
 
+let rec unlink = function
+	| TVar ({contents = Link ty} as tvar) ->
+			let ty = unlink ty in
+			tvar := Link ty ;
+			ty
+	| ty -> ty
+
+let rec is_monomorphic = function
+	| TForall _ -> false
+	| TConst _ -> true
+	| TVar {contents = Link ty} -> is_monomorphic ty
+	| TVar _ -> true
+	| TApp (ty, ty_arg_list) ->
+			is_monomorphic ty && List.for_all is_monomorphic ty_arg_list
+	| TArrow(param_ty_list, return_ty) ->
+			List.for_all is_monomorphic param_ty_list && is_monomorphic return_ty
+
 type ty_ann = id list * ty             (* type annotation: `some[a b] a -> b` *)
 
 type expr =
@@ -24,6 +41,10 @@ type expr =
 	| Fun of (name * ty_ann option) list * expr    (* abstraction *)
 	| Let of name * expr * expr             (* let *)
 	| Ann of expr * ty_ann                  (* type annotation: `1 : int` *)
+
+let is_annotated = function
+	| Ann _ -> true
+	| _ -> false
 
 
 
