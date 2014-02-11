@@ -42,8 +42,9 @@ type expr =
 	| Let of name * expr * expr             (* let *)
 	| Ann of expr * ty_ann                  (* type annotation: `1 : int` *)
 
-let is_annotated = function
+let rec is_annotated = function
 	| Ann _ -> true
+	| Let(_, _, body) -> is_annotated body
 	| _ -> false
 
 
