@@ -17,9 +17,7 @@ let test_cases = [
 	("let x = id in x", OK "forall[a] a -> a");
 	("let x = fun y -> y in x", OK "forall[a] a -> a");
 	("fun x -> x", OK "forall[a] a -> a");
-	("fun x -> x", OK "forall[int] int -> int");
 	("pair", OK "forall[a b] (a, b) -> pair[a, b]") ;
-	("pair", OK "forall[z x] (x, z) -> pair[x, z]") ;
 	("fun x -> let y = fun z -> z in y", OK "forall[a b] a -> b -> b");
 	("let f = fun x -> x in let id = fun y -> y in eq(f, id)", OK "bool");
 	("let f = fun x -> x in let id = fun y -> y in eq_curry(f)(id)", OK "bool");
@@ -34,7 +32,7 @@ let test_cases = [
 	("choose(fun x y -> x, fun x y -> y)", OK "forall[a] (a, a) -> a");
 	("choose_curry(fun x y -> x)(fun x y -> y)", OK "forall[a] (a, a) -> a");
 	("let x = id in let y = let z = x(id) in z in y", OK "forall[a] a -> a");
-	("cons(id, nil)", OK "forall[a] list[a -> a]");
+	("single(id)", OK "forall[a] list[a -> a]");
 	("cons_curry(id)(nil)", OK "forall[a] list[a -> a]");
 	("let lst1 = cons(id, nil) in let lst2 = cons(succ, lst1) in lst2", OK "list[int -> int]");
 	("cons_curry(id)(cons_curry(succ)(cons_curry(id)(nil)))", OK "list[int -> int]");
@@ -56,6 +54,30 @@ let test_cases = [
 	("let const = fun x -> fun y -> x in const", OK "forall[a b] a -> b -> a");
 	("let apply = fun f x -> f(x) in apply", OK "forall[a b] (a -> b, a) -> b");
 	("let apply_curry = fun f -> fun x -> f(x) in apply_curry", OK "forall[a b] (a -> b) -> a -> b");
+
+	(* HMF *)
+	("ids", OK "list[forall[a] a -> a]");
+	("let poly = fun f -> pair(f(one), f(true)) in poly", fail);
+	("let poly = fun (f : forall[a] a -> a) -> pair(f(one), f(true)) in poly",
+		OK "(forall[a] a -> a) -> pair[int, bool]");
+	("cons(ids, nil)", OK "list[list[forall[a] a -> a]]");
+	("choose(nil, ids)", OK "list[forall[a] a -> a]");
+	("choose(ids, nil)", OK "list[forall[a] a -> a]");
+	("cons(fun x -> x, ids)", OK "list[forall[a] a -> a]");
+	("let rev_cons = fun x y -> cons(y, x) in rev_cons(ids, id)", OK "list[forall[a] a -> a]");
+	("cons(id, ids)", OK "list[forall[a] a -> a]");
+	("cons(id, cons(succ, nil))", OK "list[int -> int]");
+	("poly(id)", OK "pair[int, bool]");
+	("poly(fun x -> x)", OK "pair[int, bool]");
+	("poly(succ)", fail);
+	("apply(succ, one)", OK "int");
+	("rev_apply(one, succ)", OK "int");
+	("apply(poly, id)", OK "pair[int, bool]");
+	("apply_curry(poly)(id)", OK "pair[int, bool]");
+	("rev_apply(id, poly)", OK "pair[int, bool]");
+	("rev_apply_curry(id)(poly)", fail);
+	("(id : forall[a] a -> a) : int -> int", OK "int -> int");
+	("single(id : forall[a] a -> a)", OK "list[forall[a] a -> a]");
 	]
 
 
@@ -65,22 +87,19 @@ let string_of_result = function
 	| Fail (Some msg) -> "Fail " ^ msg
 	| OK ty_str -> "OK " ^ ty_str
 
-let normalize ty_str = string_of_ty (Parser.ty_forall_eof Lexer.token (Lexing.from_string ty_str))
-
 let cmp_result result1 result2 = match (result1, result2) with
 	| Fail None, Fail _ | Fail _, Fail None -> true
 	| Fail (Some msg1), Fail (Some msg2) -> msg1 = msg2
-	| OK ty_str1, OK ty_str2 -> (normalize ty_str1) = (normalize ty_str2)
+	| OK ty_str1, OK ty_str2 -> ty_str1 = ty_str2
 	| _ -> false
 
 let make_single_test_case (code, expected_result) =
 	String.escaped code >:: fun _ ->
+		Infer.reset_id () ;
 		let result =
 			try
-				Infer.reset_id () ;
 				let ty = Infer.infer Core.core 0 (Parser.expr_eof Lexer.token (Lexing.from_string code)) in
-				let generalized_ty = Infer.generalize (-1) ty in
-				OK (string_of_ty generalized_ty)
+				OK (string_of_ty ty)
 			with Infer.Error msg ->
 				Fail (Some msg)
 		in

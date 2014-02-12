@@ -1,4 +1,4 @@
-ocamlyacc parser.mly
+ocamlyacc -v parser.mly
 ocamllex lexer.mll
 
 ocamlfind ocamlc -linkpkg -g \
