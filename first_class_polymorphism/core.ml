@@ -12,6 +12,8 @@ let core =
 			"cons_curry : forall[a] a -> list[a] -> list[a]" ;
 			"map : forall[a b] (a -> b, list[a]) -> list[b]" ;
 			"map_curry : forall[a b] (a -> b) -> list[a] -> list[b]" ;
+			"length : forall[a] list[a] -> int" ;
+
 			"one : int" ;
 			"zero : int" ;
 			"succ : int -> int" ;
@@ -21,11 +23,12 @@ let core =
 			"not : bool -> bool" ;
 			"true : bool" ;
 			"false : bool" ;
+
 			"pair : forall[a b] (a, b) -> pair[a, b]" ;
 			"pair_curry : forall[a b] a -> b -> pair[a, b]" ;
 			"first : forall[a b] pair[a, b] -> a" ;
 			"second : forall[a b] pair[a, b] -> b" ;
-			"id : forall[a] a -> a" ;
+
 			"const : forall[a b] a -> b -> a" ;
 			"apply : forall[a b] (a -> b, a) -> b" ;
 			"apply_curry : forall[a b] (a -> b) -> a -> b" ;
@@ -33,8 +36,17 @@ let core =
 			"rev_apply_curry : forall[a b] a -> (a -> b) -> b" ;
 			"choose : forall[a] (a, a) -> a" ;
 			"choose_curry : forall[a] a -> a -> a" ;
-			"ids : list[forall[a] a -> a]" ;
+
+			"magic : forall[a b] a -> b" ;
+			"any : forall[a] a" ;
 			"poly : (forall[a] a -> a) -> pair[int, bool]" ;
+
+			"id : forall[a] a -> a" ;
+			"ids : list[forall[a] a -> a]" ;
+			"id_id : (forall[a] a -> a) -> (forall[a] a -> a)" ;
+			"almost_id_id : forall[a] (forall[a] a -> a) -> a -> a" ;
+			"id_ids : list[forall[a] a -> a] -> list[forall[a] a -> a]" ;
+			"id_magic : (forall[a b] a -> b) -> (forall[a b] a -> b)" ;
 		]
 	in
 	List.fold_left

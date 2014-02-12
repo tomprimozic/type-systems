@@ -57,8 +57,8 @@ let test_cases = [
 
 	(* HMF *)
 	("ids", OK "list[forall[a] a -> a]");
-	("let poly = fun f -> pair(f(one), f(true)) in poly", fail);
-	("let poly = fun (f : forall[a] a -> a) -> pair(f(one), f(true)) in poly",
+	("fun f -> pair(f(one), f(true))", fail);
+	("fun (f : forall[a] a -> a) -> pair(f(one), f(true))",
 		OK "(forall[a] a -> a) -> pair[int, bool]");
 	("cons(ids, nil)", OK "list[list[forall[a] a -> a]]");
 	("choose(nil, ids)", OK "list[forall[a] a -> a]");
@@ -78,6 +78,28 @@ let test_cases = [
 	("rev_apply_curry(id)(poly)", fail);
 	("(id : forall[a] a -> a) : int -> int", OK "int -> int");
 	("single(id : forall[a] a -> a)", OK "list[forall[a] a -> a]");
+	("(fun x -> fun y -> let z = choose(x, y) in z)(id : forall[a] a -> a)",
+		OK "(forall[a] a -> a) -> forall[a] a -> a");
+	("fun (x : forall[a] a -> a) -> x", OK "forall[a] (forall[b] b -> b) -> a -> a");
+	("id_id(id)", OK "forall[a] a -> a");
+	("almost_id_id(id)", OK "forall[a] a -> a");
+	("fun id -> poly(id)", fail);
+	("fun ids -> id_ids(ids)", fail);
+	("poly(id(id))", OK "pair[int, bool]");
+	("length(ids)", OK "int");
+	("map(head, single(ids))", OK "list[forall[a] a -> a]");
+	("map_curry(head)(single(ids))", OK "list[forall[a] a -> a]");
+	("apply(map_curry(head), single(ids))", OK "list[forall[a] a -> a]");
+	("apply_curry(map_curry(head))(single(ids))", OK "list[forall[a] a -> a]");
+	("apply(id, one)", OK "int");
+	("apply_curry(id)(one)", OK "int");
+	("poly(magic)", OK "pair[int, bool]");
+	("id_magic(magic)", OK "forall[a b] a -> b");
+	("fun (f : forall[a b] a -> b) -> let a = id_magic(f) in one", OK "(forall[a b] a -> b) -> int");
+	("fun (f : some[a b] a -> b) -> id_magic(f)", fail);
+	("id_magic(id)", fail);
+	("fun (f : forall[a b] a -> b) -> f : forall[a] a -> a",
+		OK "(forall[a b] a -> b) -> forall[a] a -> a");
 	]
 
 
