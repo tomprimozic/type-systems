@@ -38,7 +38,7 @@ records `{x = false | r}`. Syntax sugar for `{x = false | {y = zero | {}}}` is
 extensions `<a : _ | ...>`. A record type is a wrapper for the type of row; other wrappers
 could exist (Daan gives example of sum/variant types).
 
-The core of the type inference is implemented in methods `unify` and `rewrite_row`. The function
+The core of the type inference is implemented in functions `unify` and `rewrite_row`. The function
 `unify` unifies record types by unifying their enclosing rows, and unifies an empty row only
 with itself. If a row extension `<a : t | r>` is unified with another row, the function
 `rewrite_row` rewrites the second row by searching for the first field with label `a` and
@@ -57,7 +57,7 @@ represented as a list of record/row extensions, whose order depends on programme
 and inner workings of the type inference algorithm. The unification procedure can rearrange
 fields as necessary, but records and record types can not be easily compared or canonically
 represented by strings. A better solution would be to gather all labels into a multi-map
-and use a set sorting order for labels when representing rows as strings.
+and use a specific sorting order for labels when representing rows as strings.
 
 While this type system is simple to implement and use (for example, it is a part of the language
 [Elm][3]), it represents only one possibility for typing extensible records. Other
