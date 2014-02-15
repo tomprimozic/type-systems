@@ -279,8 +279,8 @@ let rec infer env level = function
 				if is_annotated body_expr then inferred_return_ty
 				else instantiate (level + 1) inferred_return_ty in
 			if not (List.for_all is_monomorphic !var_list_ref) then
-				error ("polymorphic parameter inferred: ["
-					^ String.concat ", " (List.map string_of_ty !var_list_ref) ^ "]")
+				error ("polymorphic parameter inferred: "
+					^ String.concat ", " (List.map string_of_ty !var_list_ref))
 			else
 				generalize level (TArrow(param_ty_list, return_ty))
 	| Let(var_name, value_expr, body_expr) ->
@@ -290,7 +290,7 @@ let rec infer env level = function
 			let fn_ty = instantiate (level + 1) (infer env (level + 1) fn_expr) in
 			let param_ty_list, return_ty = match_fun_ty (List.length arg_list) fn_ty in
 			infer_args env (level + 1) param_ty_list arg_list ;
-			generalize level return_ty
+			generalize level (instantiate (level + 1) return_ty)
 	| Ann(expr, ty_ann) ->
 			let _, ty = instantiate_ty_ann level ty_ann in
 			let expr_ty = infer env level expr in
@@ -299,13 +299,14 @@ let rec infer env level = function
 
 and infer_args env level param_ty_list arg_list =
 	let pair_list = List.combine param_ty_list arg_list in
-	let sorted_pair_list = List.fast_sort
+	let get_ordering ty arg =
 		(* subsume type variables last *)
-		(fun (ty1, _) (ty2, _) -> match (unlink ty1, unlink ty2) with
-			| TVar {contents = Unbound _}, TVar {contents = Unbound _} -> 0
-			| TVar {contents = Unbound _}, _ -> 1
-			| _, TVar {contents = Unbound _} -> -1
-			| _, _ ->  0)
+		match unlink ty with
+				| TVar {contents = Unbound _ } -> 1
+				| _ -> 0
+	in
+	let sorted_pair_list = List.fast_sort
+		(fun (ty1, arg1) (ty2, arg2) -> compare (get_ordering ty1 arg1) (get_ordering ty2 arg2))
 		pair_list
 	in
 	List.iter

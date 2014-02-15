@@ -47,6 +47,8 @@ let core =
 			"almost_id_id : forall[a] (forall[a] a -> a) -> a -> a" ;
 			"id_ids : list[forall[a] a -> a] -> list[forall[a] a -> a]" ;
 			"id_magic : (forall[a b] a -> b) -> (forall[a b] a -> b)" ;
+			"id_succ : (int -> int) -> (int -> int)" ;
+			"special : ((forall[a] a -> a) -> (forall[a] a -> a)) -> forall[a] a -> a" ;
 		]
 	in
 	List.fold_left

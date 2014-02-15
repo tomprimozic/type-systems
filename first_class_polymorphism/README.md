@@ -22,7 +22,7 @@ complicated type inference algorithm.
 This implementation is based on the work of Daan Leijen, published in his paper
 [HMF: Simple Type Inference for First-Class Polymorphism][hmf]. In contrast to MLF, it only
 uses very intuitive System F types and has a considerably simpler type inference algorithm,
-yet it requires more type annotations, since it always inferes the least polymorphic type.
+yet it requires more type annotations, since it always infers the least polymorphic type.
 In addition to the basic algorithm, the implementation includes some extensions proposed by
 Daan in his paper, including rigid annotations and support for n-ary function calls, that
 can significantly increase HMF's expressive power and improve its practical usability.
@@ -107,6 +107,15 @@ Type inference in function `infer` changed significantly. We no longer instantia
 
 To infer the type of function application we first infer the type of the function being called, instantiate it and separate parameter types from function return type. The core of the algorithm is infering argument types in the function `infer_args`. After infering the type of the argument, we use the function `subsume` (or `unify` if the argument is annotated) to determine if the parameter type is an instance of the type of the argument. When calling functions with multiple arguments, we must first subsume the types of arguments for those parameters that are *not* type variables, otherwise we would fail to typecheck applications such as `rev_apply(id, poly)`, where `rev_apply : forall[a b] (a, a -> b) -> b`, `poly : (forall[a] a -> a) -> pair[int, bool]` and `id : forall[a] a -> a`. Infering type annotation `expr : type` is equivalent to inferring the type of a function call `(fun (x : type) -> x)(expr)`, but optimized in this implementation of `infer`.
 
+
+Extensions
+----------
+
+Daan Leijen also published a reference implementation of HMF, written in Haskell. In addition to the type inference algorithm describe in his paper, he implemented an interesting extension to the algorithm that significantly improves the usability of HMF for programmers. In **Overview** we saw that in order to create a list of polymorphic functions `ids : list[forall[a] a -> a]`, the programmer must add a type annotation `let ids = single(id : forall[a] a -> a)`, otherwise HMF infers the least polymorphic type. The type annotation must be provided on the *argument* to the function `single`, in order to prevent the argument type from being instantiated. However, it would be more desirable for the programmer to be able to specify the type of the *result* of function `single`, like so: `let ids = single(id) : list[forall[a] a -> a]`.
+
+We can implement this in the type inference algorithm by adding information about *expected types* and *propagating* the information from function result type to function arguments and to parameter types of anonymous functions. To function `infer` we add two additional arguments `maybe_expected_ty`, for optionally specifying the resulting type, and `generalized`, which indicates whether the resulting type should be generalized or instantiated. To infer the type of function expression, we annotate the unannotated parameters with expected parameter types and use the expected return type to infer the type of the function body. To propagate the expected type through a function application, we first unify function return type with the expected return type. Then we infer the types of the arguments, taking care to first infer the annotated arguments and to infer arguments to parameters which are type variables last.
+
+In addition to a more intuitive type annotation in cases such as `ids` above, this extension sometimes allows programmers to write anonymous functions with polymorphic arguments without annotations. The function `special : ((forall[a] a -> a) -> (forall[a] a -> a)) -> forall[a] a -> a` expects a function with a polymorphic parameter, which we can define without any annotations: `special(fun f -> f(f))`. We cannot propagate the result type through a function call if the return type of the function is a type variable. For example, given that `head : forall[a] list[a] -> a`, propagating the result type in `head(ids) : int -> int` would instantiate the parameter type to `list[int -> int]`, which is not an instance or a supertype of `list[forall[a] a -> a]` (since HMF is invariant).
 
 
 

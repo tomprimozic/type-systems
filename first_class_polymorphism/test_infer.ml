@@ -79,7 +79,7 @@ let test_cases = [
 	("(id : forall[a] a -> a) : int -> int", OK "int -> int");
 	("single(id : forall[a] a -> a)", OK "list[forall[a] a -> a]");
 	("(fun x -> fun y -> let z = choose(x, y) in z)(id : forall[a] a -> a)",
-		OK "(forall[a] a -> a) -> forall[a] a -> a");
+		OK "(forall[a] a -> a) -> (forall[a] a -> a)");
 	("fun (x : forall[a] a -> a) -> x", OK "forall[a] (forall[b] b -> b) -> a -> a");
 	("id_id(id)", OK "forall[a] a -> a");
 	("almost_id_id(id)", OK "forall[a] a -> a");
@@ -99,7 +99,32 @@ let test_cases = [
 	("fun (f : some[a b] a -> b) -> id_magic(f)", fail);
 	("id_magic(id)", fail);
 	("fun (f : forall[a b] a -> b) -> f : forall[a] a -> a",
-		OK "(forall[a b] a -> b) -> forall[a] a -> a");
+		OK "(forall[a b] a -> b) -> (forall[a] a -> a)");
+	("let const = (any : forall[a] a -> (forall[b] b -> a)) in const(any)", OK "forall[a b] a -> b");
+
+	(* propagation of types *)
+	("single(id) : list[forall[a] a -> a]", fail);
+	("id(single(id)) : list[forall[a] a -> a]", fail);
+	("cons(single(id), single(ids))", fail);
+	("id_id(id) : int -> int", OK "int -> int");
+	("head(ids)(one) : int", OK "int");
+	("head(ids) : int -> int", OK "int -> int");
+	("let f = head(ids) in f : int -> int", OK "int -> int");
+	("cons(single(id) : list[forall[a] a -> a], single(single(fun x -> x)))", fail);
+	("id_succ(head(map(id, ids)))", OK "int -> int");
+	("(fun f -> f(f)) : (forall[a] a -> a) -> (forall[a] a -> a)", fail);
+	("(fun f -> f(f)) : forall[b] (forall[a] a -> a) -> b -> b", fail);
+	("(let x = one in (fun f -> pair(f(x), f(true)))) : (forall[a] a -> a) -> pair[int, bool]",
+		fail);
+	("let returnST = any : forall[a s] a -> ST[s, a] in " ^
+	 "returnST(one) : forall[s] ST[s, int]", OK "forall[s] ST[s, int]");
+	("special(fun f -> f(f))", fail);
+	("apply(special, fun f -> f(f))", fail);
+	("rev_apply(fun f -> f(f), special)", fail);
+	("apply(fun f -> choose(id_id, f), id_id : (forall[a] a -> a) -> (forall[a] a -> a))",
+		fail);
+	("rev_apply(id_id : (forall[a] a -> a) -> (forall[a] a -> a), fun f -> choose(id_id, f))",
+		fail);
 	]
 
 
@@ -116,6 +141,10 @@ let cmp_result result1 result2 = match (result1, result2) with
 	| _ -> false
 
 let make_single_test_case (code, expected_result) =
+	let expected_result = match expected_result with
+		| OK ty_str -> OK (string_of_ty (Parser.ty_eof Lexer.token (Lexing.from_string ty_str)))
+		| x -> x
+	in
 	String.escaped code >:: fun _ ->
 		Infer.reset_id () ;
 		let result =
