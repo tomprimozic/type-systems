@@ -16,9 +16,18 @@ are minimal and contain code that is (hopefully) simple and clear.
 
 -   **extensible_rows**
     Extends **algorithm_w** with type inference for extensible records/rows
-    with scoped labels, based on Daan Leijen's excelent [paper][1]. Although this is just
-    one way of implementing extensible records, it's extremly simple and surprisingly useful.
+    with scoped labels, based on Daan Leijen's excellent [paper][extensible_rows]. Although
+    this is just one way of implementing extensible records, it's extremly simple and
+    surprisingly useful.
+
+-   **first_class_polymorphism**
+    Extends **algorithm_w** with type checking and partial type inference for first-class
+    and impredicative polymorphism, based on another one of Daan Leijen's [papers][hmf].
+    This system requires slightly more type annotations than other attempts at type inference for
+    first-class polymorphism, such as MLF, but is considerably simpler to implement and use.
 
 
 
-[1]: http://research.microsoft.com/apps/pubs/default.aspx?id=65409
+
+[extensible_rows]: http://research.microsoft.com/apps/pubs/default.aspx?id=65409
+[hmf]: http://research.microsoft.com/apps/pubs/default.aspx?id=132621
