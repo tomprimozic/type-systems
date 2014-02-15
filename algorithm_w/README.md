@@ -41,7 +41,7 @@ The function `unify` takes two types and tries to *unify* them, i.e. determine i
 be equal. Type constants unify with identical type constants, and arrow types and other
 structured types are unified by unifying each of their components. After first performing
 an "occurs check", unbound type variables can be unified with any type by replacing their
-reference by a link pointing to the other type.
+reference with a link pointing to the other type.
 
 The function `occurs_check_adjust_levels` makes sure that the type variable being unified
 doesn't occur within the type it is being unified with. This prevents the algorithm from
@@ -66,7 +66,7 @@ occuring within it, to avoid traversing non-polymorphic types during instantiati
 delays occurs checks and level adjustments. It can deal with recursive types, which arise
 often while type checking objects, by marking types during unification.  Oleg describes a
 further optimization that could be performed by condensing the sequences
-of type links as we follow them, yet our `generalize` function takes care of that problem.
+of type links as we follow them, but our `generalize` function takes care of that problem.
 
 
 References

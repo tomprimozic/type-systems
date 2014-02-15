@@ -14,7 +14,7 @@ it considerably simpler than most other record systems, which include predicates
 types such as the "lacks" predicate *`(r\l)`*, specifying that the record type `r` must not
 contain label `l`. This implementation closely follows Daan's presentation in his paper and
 is a relatively small extension of the Hindley-Milner type inference algorithm implemented
-in **algorithm_w** (the required changes can be seen in commit [5c183a7][2]).
+in **algorithm_w** (the changes can be seen in commit [5c183a7][2]).
 
 Records consist of labeled fields with values `{a = one, b = false}` and can extend other
 records `{x = false | r}`. The basic operations for records are *selection*, *extension*
@@ -44,7 +44,7 @@ with itself. If a row extension `<a : t | r>` is unified with another row, the f
 `rewrite_row` rewrites the second row by searching for the first field with label `a` and
 unifies its type with `t`. All other types are handled as before.
 
-The only other significant difference is in function `infer`, where the types of the new
+The only other significant change is in function `infer`, where the types of new
 expression terms are inferred by treating them as implicit calls to *selection*, *extension*
 and *restriction* functions with types as above.
 
@@ -61,7 +61,7 @@ and use a specific sorting order for labels when representing rows as strings.
 
 While this type system is simple to implement and use (for example, it is a part of the language
 [Elm][3]), it represents only one possibility for typing extensible records. Other
-proposals, summarized on the [GHC wiki][4], include first-class labels, positive and negative
+proposals, summarized in [GHC wiki][4], include first-class labels, positive and negative
 ("lacks") predicates for record types and even more general predicates such as "disjoint", and
 also include structural subtyping (as used for objects in OCaml and Go).
 
