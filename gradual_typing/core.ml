@@ -21,7 +21,8 @@ let core =
 	assume "one" "int" ;
 	assume "zero" "int" ;
 	assume "succ" "int -> int" ;
-	assume "plus" "(int, int) -> inc" ;
+	assume "plus" "(int, int) -> int" ;
+	assume "sum" "list[int] -> int" ;
 	assume "eq" "forall[a] (a, a) -> bool" ;
 	assume "eq_curry" "forall[a] a -> a -> bool" ;
 	assume "not" "bool -> bool" ;
@@ -37,5 +38,12 @@ let core =
 	assume "apply_curry" "forall[a b] (a -> b) -> a -> b" ;
 	assume "choose" "forall[a] (a, a) -> a" ;
 	assume "choose_curry" "forall[a] a -> a -> a" ;
+
+	assume "dynamic_to_dynamic" "? -> ?" ;
+	assume "dynamic_to_int" "? -> int" ;
+	assume "int_to_dynamic" "int -> ?" ;
+	assume "dynamic" "?" ;
+	assume "test" "(? -> int, int -> ?) -> int" ;
+	assume "test_curry" "(? -> int) -> (int -> ?) -> int" ;
 
 	!core_ref

@@ -16,6 +16,8 @@ rule token = parse
 	| "let"                 { LET }
 	| "in"                  { IN }
 	| "forall"              { FORALL }
+	| "some"                { SOME }
+	| '_'										{ UNDERSCORE }
 	| ident                 { IDENT (Lexing.lexeme lexbuf) }
 	| '('     { LPAREN }
 	| ')'     { RPAREN }
@@ -24,6 +26,8 @@ rule token = parse
 	| '='     { EQUALS }
 	| "->"    { ARROW }
 	| ','     { COMMA }
+	| ':'     { COLON }
+	| '?'     { QUESTIONMARK }
 	| eof     { EOF }
 	| _       { raise Error }
 
@@ -35,6 +39,8 @@ let string_of_token = function
 	| LET -> "let"
 	| IN -> "in"
 	| FORALL -> "forall"
+	| SOME -> "some"
+	| UNDERSCORE -> "_"
 	| IDENT ident -> ident
 	| LPAREN -> "("
 	| RPAREN -> ")"
@@ -43,6 +49,8 @@ let string_of_token = function
 	| EQUALS -> "="
 	| ARROW -> "->"
 	| COMMA -> ","
+	| COLON -> ":"
+	| QUESTIONMARK -> "?"
 	| EOF -> "<eof>"
 
 }
