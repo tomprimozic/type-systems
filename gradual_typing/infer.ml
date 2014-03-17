@@ -89,7 +89,7 @@ let rec unify ty1 ty2 =
 
 
 let rec generalize level = function
-	| TDynamic -> TDynamic
+	| TDynamic -> assert false
 	| TVar {contents = Unbound(id, other_level, is_dynamic)} when other_level > level ->
 			if is_dynamic then
 				if settings.freeze_dynamic then
@@ -197,12 +197,14 @@ let rec infer env level = function
 					param_ty)
 				param_list in
 			let return_ty = infer !fn_env_ref level body_expr in
-			TArrow(param_ty_list, return_ty)
+			TArrow(List.map (instantiate level) param_ty_list, return_ty)
 	| Let(var_name, None, value_expr, body_expr) ->
 			let var_ty = infer env (level + 1) value_expr in
 			let generalized_ty = generalize level var_ty in
 			infer (Env.extend env var_name generalized_ty) level body_expr
-	| Let(var_name, Some ty_ann, value_expr, body_expr) -> error "not implemented"
+	| Let(var_name, Some ty_ann, value_expr, body_expr) ->
+			(* equivalent to `let var_name = (value_expr : ty_ann) in body_expr` *)
+			infer env level (Let(var_name, None, Ann(value_expr, ty_ann), body_expr))
 	| Call(fn_expr, arg_list) ->
 			let param_ty_list, return_ty =
 				match_fun_ty (List.length arg_list) (infer env level fn_expr)
@@ -213,6 +215,6 @@ let rec infer env level = function
 			;
 			return_ty
 	| Ann(expr, ty_ann) ->
-			(* expression `expr : ty_ann` is equivalent to `(fun (x : ty_ann) -> x)(expr)` *)
-			error "not implemented"
+			(* equivalent to `(fun (x : ty_ann) -> x)(expr)` *)
+			infer env level (Call(Fun([("x", Some ty_ann)], Var "x"), [expr]))
 

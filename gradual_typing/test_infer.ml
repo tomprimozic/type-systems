@@ -57,6 +57,11 @@ let test_hm_static = [
 	("let const = fun x -> fun y -> x in const", OK "forall[a b] a -> b -> a");
 	("let apply = fun f x -> f(x) in apply", OK "forall[a b] (a -> b, a) -> b");
 	("let apply_curry = fun f -> fun x -> f(x) in apply_curry", OK "forall[a b] (a -> b) -> a -> b");
+	("let f = fun x y -> pair(x, y) in f", OK "forall[a b] (a, b) -> pair[a, b]");
+	("let f = fun x y -> (pair(x, y) : some[a] pair[a, a]) in f",
+		OK "forall[a] (a, a) -> pair[a, a]");
+	("let f : some[a] (a, a) -> pair[a, a] = fun x y -> pair(x, y) in f",
+		OK "forall[a] (a, a) -> pair[a, a]");
 	]
 
 let test_dynamic = [
@@ -100,6 +105,18 @@ let test_dynamic = [
 		error "cannot unify types int and bool");
 	("fun -> let f = fun (x : _) -> dynamic_to_int(x) in pair(f(one), f(true))",
 		OK "() -> pair[int, int]");
+	("let f = (fun x -> x)(one) in pair(f(one), f(true))", OK "pair[?, ?]");
+	("fun (x : _) -> eq(x, (fun (y : ?) -> y))", OK " (? -> ?) -> bool");
+	("fun (x : _) (y : _) -> pair(eq(x, (fun (y : ?) -> y)), eq(x, y))",
+		OK "(? -> ?, ? -> ?) -> pair[bool, bool]");
+	("fun (x : _) -> pair(eq(x, (fun (y : ?) -> y)), x(one))", OK "(int -> ?) -> pair[bool, ?]");
+	("let x = (one : ?) in pair(x(one), pair(x(true), x))", OK "pair[?, pair[?, ?]]");
+	("let x : ? = one in pair(x(one), pair(x(true), x))", OK "pair[?, pair[?, ?]]");
+	("fun (x : int) -> cons(x, cons(dynamic, nil))", OK "int -> list[int]");
+	("fun (x : int) -> cons((x : ?), cons(dynamic, nil))", OK "int -> list[?]");
+	("let f : ? -> ? = one in f", fail);
+	("let f : ? -> ? = dynamic in f", OK "? -> ?");
+	("let f : ? -> ? = (fun (x : _) -> x) in pair(f(one), f(true))", OK "pair[?, ?]");
 	]
 
 let test_dynamic_ann = [
@@ -136,6 +153,11 @@ let test_dynamic_ann = [
 		error "cannot unify types int and bool");
 	("fun -> let f = fun x -> dynamic_to_int(x) in pair(f(one), f(true))",
 		OK "() -> pair[int, int]");
+	("let f = (fun (x : ?) -> x)(one) in pair(f(one), f(true))", OK "pair[?, ?]");
+	("fun x -> eq(x, (fun (y : ?) -> y))", OK " (? -> ?) -> bool");
+	("fun x y -> pair(eq(x, (fun (y : ?) -> y)), eq(x, y))",
+		OK "(? -> ?, ? -> ?) -> pair[bool, bool]");
+	("fun x -> pair(eq(x, (fun (y : ?) -> y)), x(one))", OK "(int -> ?) -> pair[bool, ?]");
 	]
 
 let test_dynamic_no_freeze = [
@@ -143,6 +165,14 @@ let test_dynamic_no_freeze = [
 	 " let g = fun (x : _) -> dynamic_to_int(x) in " ^
 	 " let y = g(one) in " ^
 	 " g", OK "() -> int -> int");
+	("fun -> " ^
+	 "(fun (g : _) -> " ^
+	 "  (fun (y : _) -> g)(g(one))) " ^
+	 " (fun (x : _) -> dynamic_to_int(x))", OK "() -> int -> int");
+	("let f = (fun (x : ?) -> x)(one) in pair(f(one), f(true))",
+		error "cannot unify types int and bool");
+	("let f : ? -> ? = (fun (x : _) -> x) in pair(f(one), f(true))",
+		error "cannot unify types int and bool");
 	]
 
 
