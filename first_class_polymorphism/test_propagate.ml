@@ -1,3 +1,9 @@
+(*
+	Parts of this file are based on code from Daan Leijen's
+	reference implementation of HMF, available at (as of 2014/04/04)
+	http://research.microsoft.com/en-us/um/people/daan/download/hmf-prototype-ref.zip
+*)
+
 open OUnit2
 open Expr
 
