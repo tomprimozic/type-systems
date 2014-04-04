@@ -21,7 +21,7 @@ let core =
 	assume "one" "int" ;
 	assume "zero" "int" ;
 	assume "succ" "int -> int" ;
-	assume "plus" "(int, int) -> inc" ;
+	assume "plus" "(int, int) -> int" ;
 	assume "eq" "forall[a] (a, a) -> bool" ;
 	assume "eq_curry" "forall[a] a -> a -> bool" ;
 	assume "not" "bool -> bool" ;

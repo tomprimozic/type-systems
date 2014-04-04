@@ -9,7 +9,7 @@ type inference or experiment by extending or implementing their own. The impleme
 are minimal and contain code that is (hopefully) simple and clear.
 
 -   [**algorithm_w**](https://github.com/tomprimozic/type-systems/tree/master/algorithm_w)
-    contains one of the most basic, yet efficient implementation of Damas-Hindley-Milner
+    contains one of the most basic yet efficient implementation of Damas-Hindley-Milner
     type inference algorithm (used in functional languages such as OCaml, Haskell and Elm)
     called *Algorithm W*. Uses references to simulate type substitutions and assigns
     ranks/levels to type variables to simplify let-generalization.
