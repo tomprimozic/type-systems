@@ -85,8 +85,8 @@ ty_forall:
 
 ty_ann:
 	| ty                                      { $1 }
-	| SOME LBRACKET ident_list RBRACKET ty    { replace_ty_constants_with_vars new_bound_var $3 $5 }
-	| UNDERSCORE                              { new_bound_var () }
+	| SOME LBRACKET ident_list RBRACKET ty    { replace_ty_constants_with_vars new_gen_var $3 $5 }
+	| UNDERSCORE                              { new_gen_var () }
 
 ty:
 	| simple_ty                                         { $1 }

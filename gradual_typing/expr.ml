@@ -14,7 +14,6 @@ and tvar =
 	| Unbound of id * level * bool
 	| Link of ty
 	| Generic of id
-	| Bound of id
 
 type expr =
 	| Var of name                           (* variable *)
@@ -54,7 +53,6 @@ let string_of_ty_with_var_names ty =
 		| TConst name -> name
 		| TApp(ty, ty_arg_list) ->
 				simple ty ^ "[" ^ String.concat ", " (List.map complex ty_arg_list) ^ "]"
-		| TVar {contents = Bound id}
 		| TVar {contents = Generic id} -> begin
 				try
 					Hashtbl.find id_name_map id

@@ -5,7 +5,7 @@ type result =
 	| OK of expr
 	| Fail
 
-let bound i = TVar (ref (Bound i))
+let bound i = TVar (ref (Generic i))
 
 let test_cases = [
 	("", Fail);

@@ -24,7 +24,6 @@ let reset_id () = current_id := 0
 
 let new_var level is_dynamic = TVar (ref (Unbound(next_id (), level, is_dynamic)))
 let new_gen_var () = TVar (ref (Generic (next_id ())))
-let new_bound_var () = TVar (ref (Bound (next_id ())))
 
 
 exception Error of string
@@ -46,14 +45,14 @@ end
 let occurs_check_adjust_levels_make_vars_dynamic tvar_id tvar_level tvar_is_dynamic ty =
 	let rec f = function
 		| TVar {contents = Link ty} -> f ty
-		| TVar {contents = Generic _ | Bound _} -> assert false
+		| TVar {contents = Generic _} -> assert false
 		| TVar ({contents = Unbound(other_id, other_level, other_is_dynamic)} as other_tvar) ->
 				if other_id = tvar_id then
 					error "recursive types"
 				else
-						let new_level = min tvar_level other_level in
-						let new_is_dynamic = tvar_is_dynamic || other_is_dynamic in
-						other_tvar := Unbound(other_id, new_level, new_is_dynamic)
+					let new_level = min tvar_level other_level in
+					let new_is_dynamic = tvar_is_dynamic || other_is_dynamic in
+					other_tvar := Unbound(other_id, new_level, new_is_dynamic)
 		| TApp(ty, ty_arg_list) ->
 				f ty ;
 				List.iter f ty_arg_list
@@ -104,7 +103,6 @@ let rec generalize level = function
 			TArrow(List.map (generalize level) param_ty_list, generalize level return_ty)
 	| TVar {contents = Link ty} -> generalize level ty
 	| TVar {contents = Generic _} | TVar {contents = Unbound _} | TConst _ as ty -> ty
-	| TVar {contents = Bound _} -> assert false
 
 let instantiate level ty =
 	let id_var_map = Hashtbl.create 10 in
@@ -121,7 +119,6 @@ let instantiate level ty =
 			end
 		| TDynamic -> new_var level true
 		| TVar {contents = Unbound _} -> ty
-		| TVar {contents = Bound _} -> assert false
 		| TApp(ty, ty_arg_list) ->
 				TApp(f ty, List.map f ty_arg_list)
 		| TArrow(param_ty_list, return_ty) ->
@@ -134,9 +131,8 @@ let instantiate_ty_ann level ty =
 	let rec f ty = match ty with
 		| TConst _ | TDynamic -> ty
 		| TVar {contents = Link ty} -> f ty
-		| TVar {contents = Generic _} -> assert false
 		| TVar {contents = Unbound _} -> ty
-		| TVar {contents = Bound id} -> begin
+		| TVar {contents = Generic id} -> begin
 				try
 					Hashtbl.find id_var_map id
 				with Not_found ->
@@ -150,7 +146,7 @@ let instantiate_ty_ann level ty =
 				TArrow(List.map f param_ty_list, f return_ty)
 	in
 	f ty
-	
+
 
 
 let rec match_fun_ty num_params = function

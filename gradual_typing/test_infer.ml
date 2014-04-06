@@ -62,6 +62,7 @@ let test_hm_static = [
 		OK "forall[a] (a, a) -> pair[a, a]");
 	("let f : some[a] (a, a) -> pair[a, a] = fun x y -> pair(x, y) in f",
 		OK "forall[a] (a, a) -> pair[a, a]");
+	("let f : some[a] a -> a = succ in f", OK "int -> int");
 	]
 
 let test_dynamic = [
@@ -117,6 +118,7 @@ let test_dynamic = [
 	("let f : ? -> ? = one in f", fail);
 	("let f : ? -> ? = dynamic in f", OK "? -> ?");
 	("let f : ? -> ? = (fun (x : _) -> x) in pair(f(one), f(true))", OK "pair[?, ?]");
+	("let f : ? -> ? = succ in f", OK "? -> ?");
 	]
 
 let test_dynamic_ann = [
