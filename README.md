@@ -18,16 +18,24 @@ are minimal and contain code that is (hopefully) simple and clear.
     extends **algorithm_w** with type inference for extensible records/rows
     with scoped labels, based on Daan Leijen's excellent [paper][extensible_rows]. Although
     this is just one way of implementing extensible records, it's extremly simple and
-    surprisingly useful.
+    surprisingly useful, and was incorporated into the programming language
+    [Elm](http://elm-lang.org/learn/Records.elm).
 
 -   [**first_class_polymorphism**](https://github.com/tomprimozic/type-systems/tree/master/first_class_polymorphism)
     extends **algorithm_w** with type checking and partial type inference for first-class
     and higher-rank polymorphism, based on another one of Daan Leijen's [papers][hmf].
     This system requires slightly more type annotations than other attempts at type inference for
-    first-class polymorphism, such as ML<sup>F</sup>, but is considerably simpler to implement and use.
+    first-class polymorphism, such as ML<sup>F</sup>, but is considerably simpler to implements
+    and use.
 
+-   [**gradual_typing**](https://github.com/tomprimozic/type-systems/tree/master/gradual_typing)
+    is another simple extension of **algorithm_w** based on a [paper][gradual] by Jeremy G. Siek
+    and Manish Vachharajani. Gradual typing combines the benefits of static and dynamic typing,
+    allowing programmers to make dynamic programs safer by adding static type information, and
+    make static programs more flexible by delaying type-checking until runtime when necessary.
 
 
 
 [extensible_rows]: http://research.microsoft.com/apps/pubs/default.aspx?id=65409
 [hmf]: http://research.microsoft.com/apps/pubs/default.aspx?id=132621
+[gradual]: http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.84.8219&rep=rep1&type=pdf
