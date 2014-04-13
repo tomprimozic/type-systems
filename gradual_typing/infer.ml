@@ -104,7 +104,8 @@ let rec generalize level = function
 	| TVar {contents = Link ty} -> generalize level ty
 	| TVar {contents = Generic _} | TVar {contents = Unbound _} | TConst _ as ty -> ty
 
-let instantiate level ty =
+
+let instantiate_helper instantiate_dynamic level ty =
 	let id_var_map = Hashtbl.create 10 in
 	let rec f ty = match ty with
 		| TConst _ -> ty
@@ -117,8 +118,12 @@ let instantiate level ty =
 					Hashtbl.add id_var_map id var ;
 					var
 			end
-		| TDynamic -> new_var level true
 		| TVar {contents = Unbound _} -> ty
+		| TDynamic ->
+				if instantiate_dynamic then
+					new_var level true
+				else
+					TDynamic
 		| TApp(ty, ty_arg_list) ->
 				TApp(f ty, List.map f ty_arg_list)
 		| TArrow(param_ty_list, return_ty) ->
@@ -126,27 +131,9 @@ let instantiate level ty =
 	in
 	f ty
 
-let instantiate_ty_ann level ty =
-	let id_var_map = Hashtbl.create 10 in
-	let rec f ty = match ty with
-		| TConst _ | TDynamic -> ty
-		| TVar {contents = Link ty} -> f ty
-		| TVar {contents = Unbound _} -> ty
-		| TVar {contents = Generic id} -> begin
-				try
-					Hashtbl.find id_var_map id
-				with Not_found ->
-					let var = new_var level false in
-					Hashtbl.add id_var_map id var ;
-					var
-			end
-		| TApp(ty, ty_arg_list) ->
-				TApp(f ty, List.map f ty_arg_list)
-		| TArrow(param_ty_list, return_ty) ->
-				TArrow(List.map f param_ty_list, f return_ty)
-	in
-	f ty
+let instantiate level ty = instantiate_helper true level ty
 
+let instantiate_ty_ann level ty = instantiate_helper false level ty
 
 
 let rec match_fun_ty num_params = function
