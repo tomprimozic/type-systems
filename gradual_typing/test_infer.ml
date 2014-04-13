@@ -119,6 +119,15 @@ let test_dynamic = [
 	("let f : ? -> ? = dynamic in f", OK "? -> ?");
 	("let f : ? -> ? = (fun (x : _) -> x) in pair(f(one), f(true))", OK "pair[?, ?]");
 	("let f : ? -> ? = succ in f", OK "? -> ?");
+	("eq(pair(one, true), duplicate(dynamic))", OK "bool");
+	("let m = duplicate(dynamic) in eq(pair(one, true), m)", OK "bool");
+	("fun (x : some[a] pair[a, a]) -> " ^
+	 " let b = eq(x, dynamic) in " ^
+	 " eq(pair(one, true), id(x))", fail);
+	("fun (x : some[a] pair[a, a]) -> " ^
+	 " let b = eq(x, dynamic) in " ^
+	 " let m = id(x) in " ^
+	 " eq(pair(one, true), m)", fail);
 	]
 
 let test_dynamic_ann = [

@@ -38,6 +38,7 @@ let core =
 	assume "apply_curry" "forall[a b] (a -> b) -> a -> b" ;
 	assume "choose" "forall[a] (a, a) -> a" ;
 	assume "choose_curry" "forall[a] a -> a -> a" ;
+	assume "duplicate" "forall[a] a -> pair[a, a]" ;
 
 	assume "dynamic_to_dynamic" "? -> ?" ;
 	assume "dynamic_to_int" "? -> int" ;

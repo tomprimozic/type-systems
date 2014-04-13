@@ -171,6 +171,18 @@ let rec match_fun_ty num_params = function
 	| _ -> error "expected a function"
 
 
+let rec duplicate_dynamic level = function
+	| TDynamic -> assert false
+	| TVar {contents = Unbound(id, other_level, true)} when other_level > level ->
+			new_var level true
+	| TApp(ty, ty_arg_list) ->
+			TApp(duplicate_dynamic level ty, List.map (duplicate_dynamic level) ty_arg_list)
+	| TArrow(param_ty_list, return_ty) ->
+			TArrow(List.map (duplicate_dynamic level) param_ty_list, duplicate_dynamic level return_ty)
+	| TVar {contents = Link ty} -> duplicate_dynamic level ty
+	| TVar {contents = Generic _} | TVar {contents = Unbound _} | TConst _ as ty -> ty
+
+
 let rec infer env level = function
 	| Var name -> begin
 			try
@@ -203,13 +215,13 @@ let rec infer env level = function
 			infer env level (Let(var_name, None, Ann(value_expr, ty_ann), body_expr))
 	| Call(fn_expr, arg_list) ->
 			let param_ty_list, return_ty =
-				match_fun_ty (List.length arg_list) (infer env level fn_expr)
+				match_fun_ty (List.length arg_list) (infer env (level + 1) fn_expr)
 			in
 			List.iter2
-				(fun param_ty arg_expr -> unify param_ty (infer env level arg_expr))
+				(fun param_ty arg_expr -> unify param_ty (infer env (level + 1) arg_expr))
 				param_ty_list arg_list
 			;
-			return_ty
+			duplicate_dynamic level return_ty
 	| Ann(expr, ty_ann) ->
 			(* equivalent to `(fun (x : ty_ann) -> x)(expr)` *)
 			infer env level (Call(Fun([("x", Some ty_ann)], Var "x"), [expr]))
