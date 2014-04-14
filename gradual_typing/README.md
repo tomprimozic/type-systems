@@ -113,6 +113,7 @@ in two significant ways: it handles let-polymorphism (in the same manner as Algo
 supports *freezing* of dynamic types in variables bound by `let` expressions, allowing them to
 be reused multiple times in different contexts.
 
+The main changes between `algorithm_w` and this implementation can be seen in file `infer.ml` [here][git-diff].
 We extend the expressions of `algorithm_w` by adding type annotations to function parameters
 (`fun (x : int) -> x + 1`), let-bound variables (`let x : ? = 1`) and standalone expressions
 (`f(x) : int`).  The setting `dynamic_parameters` controls whether function parameters without
@@ -125,17 +126,17 @@ the latter to be written as `fun (g : _) -> g(true)`), for which the system infe
 We also introduce type constructor `TDynamic`, used to represent `?`. However, `TDynamic`
 is only used to represent type `?` for variables in type environment; as soon as the variable
 is used, `TDynamic` is instantiated and replaced with a fresh *dynamic type variable*, which
-is represented by constructor `Unbound` but distinguished from a *regular type variable* with
+is represented by constructor `Unbound` but distinguished from an *ordinary type variable* with
 a boolean flag. This is not unlike the treatment of polymorphic types in Algorithm W; indeed,
 when a variable with a polymorphic type is used, its type is instantiated by replacing all
-occurrences of generic type variables with fresh regular type variables. Conversely, just as
-polymorphic types can be recovered at let-bindings by generalizing free regular type variables,
+occurrences of generic type variables with fresh ordinary type variables. Conversely, just as
+polymorphic types can be recovered at let-bindings by generalizing free ordinary type variables,
 so can dynamic type variables be *frozen* at let-bindings by replacing them with `TDynamic`
 types (this is controlled by the setting `freeze_dynamic`).
 
 The idea that makes polymorphic types polymorphic and dynamic types dynamic is that fresh type
-variables can be unified with any other type. However, type variables can only be unified with
-a single type. This can be a problem when using functions such as
+variables can be unified with any other type. However, each type variable can only be unified
+once, with a single type. This can be a problem when using functions such as
 `duplicate : forall[a] a -> pair[a, a]`, which duplicate type variables. The following results
 in an error:
 
@@ -183,13 +184,13 @@ A related issue is that of efficiently translating type casts and reporting erro
 moment. The straightforward way of implementing function casts is to cast the argument and the
 return value separately: if `f` has type `? -> ?`, then the cast `f : int -> bool` can be
 compiled as `fun (x : int) -> (f(x) : bool)`. However, if we have two functions that call each
-other recursively (e.g. the basic example of `is_odd` and `is_even`), one static and the
+other recursively (e.g. the [basic example][mutual-recursion] of `is_odd` and `is_even`), one static and the
 other dynamic, a naive implementation would just keep adding cast upon cast, which would result
 in space-wise and time-wise inefficient execution. A related issue is how to implement casts
 such as `((inc : int -> int) : ?) : bool -> bool` - should the type error be reported immediately,
 or only when the function is first used? The first issue is touched upon in [5], while the second
 is elaborated more deeply in [6] and also explained in a
-[series of blog posts](http://siek.blogspot.co.uk/2012/09/interpretations-of-gradually-typed.html).
+[series of blog posts][blog-post].
 
 Finally, [7] explains how to implement safe casts from dynamic functions to parametrically
 polymorphic types (such as `forall[a] a -> a`) by using *dynamic sealing*. For example, if `f`
@@ -197,7 +198,7 @@ has type `? -> ?`, we can implement the cast `f : forall[a] a -> a` by translati
 `fun x -> unwrap@1 (f (wrap@1 x))`, where the wrapped value `(wrap@1 x)` cannot be inspected in
 any way (e.g. using typecase) and can only be unwrapped by the corresponding `unwrap@1`. This way,
 we can be sure that the argument `x` is really used parametrically and we can recover the proof
-that the only values of type `forall[a] a -> a` are `id` and functions that either diverge or
+that the only values of type `forall[a] a -> a` are the identity function and functions that either diverge or
 raise an error. However, it remains unclear if this idea can be extended to polymorphic
 container types, i.e. how to safely implement casts such as `f : forall[a] a -> list[a]`.
 
@@ -220,6 +221,7 @@ container types, i.e. how to safely implement casts such as `f : forall[a] a -> 
 
 [gradual]: http://ecee.colorado.edu/~siek/pubs/pubs/2006/siek06:_gradual.pdf
 [inference]: http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.84.8219&rep=rep1&type=pdf
+[git-diff]: https://github.com/tomprimozic/type-systems/compare/7320bae...1ae7906#diff-4
 [objects]: http://www.cs.colorado.edu/~siek/gradual-obj.pdf
-
-
+[mutual-recursion]: http://en.wikipedia.org/wiki/Mutual_recursion#Basic_examples
+[blog-post]: http://siek.blogspot.co.uk/2012/09/interpretations-of-gradually-typed.html
