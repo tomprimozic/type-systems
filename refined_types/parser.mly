@@ -3,27 +3,28 @@
 open Expr
 open Infer
 
+module StringMap = Map.Make (String)
+
 let unary op arg = SCall(SVar op, [arg])
 let binary op left right = SCall(SVar op, [left; right])
 
 let replace_ty_constants_with_vars var_name_list ty =
 	let env = List.fold_left
-		(fun env var_name -> SEnv.extend env var_name (new_gen_s_var ()))
-		SEnv.empty var_name_list
+		(fun env var_name -> StringMap.add var_name (new_gen_var ()) env)
+		StringMap.empty var_name_list
 	in
 	let rec f ty = match ty with
-		| STConst name -> begin
+		| TConst name -> begin
 				try
-					SEnv.lookup env name
+					StringMap.find name env
 				with Not_found -> ty
 			end
-		| STVar _ -> ty
-		| STApp(name, ty_arg_list) ->
-				STApp(name, List.map f ty_arg_list)
-		| STArrow(param_ty_list, return_ty) ->
-				STArrow(List.map f param_ty_list, f return_ty)
-		| STRefined(name, ty, expr) ->
-				STRefined(name, f ty, expr)
+		| TVar _ -> ty
+		| TApp(name, ty_arg_list) ->
+				TApp(name, List.map f ty_arg_list)
+		| TArrow(param_refined_ty_list, return_refined_ty) ->
+				TArrow(List.map g param_refined_ty_list, g return_refined_ty)
+	and g (ty, maybe_name_and_expr) = (f ty, maybe_name_and_expr)
 	in
 	f ty
 
@@ -63,21 +64,11 @@ ty_forall_eof:
 
 expr:
 	| boolean_expr                                { $1 }
-	| atomic_expr COLON function_ty               { SCast($1, $3) }
-	| atomic_expr COLON simple_ty IF expr         {
-				match $1 with
-					| SVar name -> SCast($1, STRefined(name, $3, $5))
-					| _ -> SCast($1, STRefined("", $3, $5))
-			}
+	| simple_expr COLON ty                        { SCast($1, $3, None) }
+	| simple_expr COLON ty IF expr                { SCast($1, $3, Some $5) }
 	| LET IDENT EQUALS expr IN expr               { SLet($2, $4, $6) }
 	| fun_expr                                    { $1 }
 	| IF expr THEN expr ELSE expr                 { SIf($2, $4, $6) }
-
-fun_expr:
-	| FUN LPAREN param_list RPAREN ARROW expr                   { SFun($3, None, $6) }
-	| FUN LPAREN RPAREN ARROW expr                              { SFun([], None, $5) }
-	| FUN LPAREN param_list RPAREN COLON simple_ty ARROW expr   { SFun($3, Some $6, $8) }
-	| FUN LPAREN RPAREN COLON simple_ty ARROW expr              { SFun([], Some $5, $7) }
 
 boolean_expr:
 	| relation_expr                     { $1 }
@@ -90,22 +81,22 @@ relation_expr:
 	| arithmetic_expr relation_op arithmetic_expr       { binary $2 $1 $3 }
 
 arithmetic_expr:
-	| atomic_expr                               { $1 }
-	| MINUS atomic_expr %prec UNARY_MINUS       { unary "unary-" $2 }
+	| simple_expr                               { $1 }
+	| MINUS simple_expr %prec UNARY_MINUS       { unary "unary-" $2 }
 	| arithmetic_expr PLUS arithmetic_expr      { binary "+" $1 $3 }
 	| arithmetic_expr MINUS arithmetic_expr     { binary "-" $1 $3 }
 	| arithmetic_expr STAR arithmetic_expr      { binary "*" $1 $3 }
 	| arithmetic_expr SLASH arithmetic_expr     { binary "/" $1 $3 }
 	| arithmetic_expr PERCENT arithmetic_expr   { binary "%" $1 $3 }
 
-atomic_expr:
+simple_expr:
 	| IDENT                                             { SVar $1 }
 	| INT                                               { SInt $1 }
 	| TRUE                                              { SBool true }
 	| FALSE                                             { SBool false }
 	| LPAREN expr RPAREN                                { $2 }
-	| atomic_expr LPAREN expr_comma_list RPAREN         { SCall($1, $3) }
-	| atomic_expr LPAREN RPAREN                         { SCall($1, []) }
+	| simple_expr LPAREN expr_comma_list RPAREN         { SCall($1, $3) }
+	| simple_expr LPAREN RPAREN                         { SCall($1, []) }
 
 expr_comma_list:
 	| expr                          { [$1] }
@@ -119,14 +110,26 @@ relation_op:
 	| EQ    { "==" }
 	| NE    { "!=" }
 
+fun_expr:
+	| FUN IDENT ARROW expr                                      { SFun([($2, None)], None, $4) }
+	| FUN LPAREN param_list RPAREN ARROW expr                   { SFun($3, None, $6) }
+	| FUN LPAREN RPAREN ARROW expr                              { SFun([], None, $5) }
+	| FUN LPAREN param_list RPAREN COLON return_ty ARROW expr   { SFun($3, Some $6, $8) }
+	| FUN LPAREN RPAREN COLON return_ty ARROW expr              { SFun([], Some $5, $7) }
+
 param_list:
 	| param                   { [$1] }
 	| param COMMA param_list  { $1 :: $3 }
 
 param:
-	| IDENT                           { ($1, None) }
-	| IDENT COLON function_ty           { ($1, Some $3) }
-	| IDENT COLON simple_ty IF expr   { ($1, Some (STRefined($1, $3, $5))) }
+	| IDENT                       { ($1, None) }
+	| IDENT COLON ty              { ($1, Some ($3, None)) }
+	| IDENT COLON ty IF expr      { ($1, Some ($3, Some $5)) }
+
+return_ty:
+	| some_simple_ty                          { ($1, None) }
+	| LPAREN IDENT COLON ty RPAREN            { ($4, Some ($2, None)) }
+	| LPAREN IDENT COLON ty IF expr RPAREN    { ($4, Some ($2, Some $6)) }
 
 ident_list:
 	| IDENT               { [$1] }
@@ -137,28 +140,43 @@ ty_forall:
 	| FORALL LBRACKET ident_list RBRACKET ty    { replace_ty_constants_with_vars $3 $5 }
 
 ty:
-	| function_ty                           { $1 }
-	| IDENT COLON function_ty IF expr       { STRefined($1, $3, $5) }
-	| IDENT COLON function_ty               { STRefined($1, $3, SBool true) }
+	| simple_ty                                       { $1 }
+	| function_ty                                     { $1 }
+	| SOME LBRACKET ident_list RBRACKET ty   {
+				replace_ty_constants_with_vars $3 $5
+			}
 
 function_ty:
-	| atomic_ty                                                   { $1 }
-	| LPAREN RPAREN ARROW function_ty                             { STArrow([], $4) }
-	| atomic_ty ARROW function_ty                                 { STArrow([$1], $3) }
-	| LPAREN ty COMMA ty_comma_list RPAREN ARROW function_ty      { STArrow($2 :: $4, $7) }
-	| SOME LBRACKET ident_list RBRACKET function_ty               {
+	| LPAREN RPAREN ARROW function_ret_ty                               { TArrow([], $4) }
+	| simple_ty ARROW function_ret_ty                                   { TArrow([($1, None)], $3) }
+	| LPAREN refined_ty RPAREN ARROW function_ret_ty                    { TArrow([$2], $5) }
+	| LPAREN param_ty COMMA param_ty_list RPAREN ARROW function_ret_ty  { TArrow($2 :: $4, $7) }
+
+function_ret_ty:
+	| ty                            { ($1, None) }
+	| LPAREN refined_ty RPAREN      { $2 }
+
+param_ty_list:
+	| param_ty                        { [$1] }
+	| param_ty COMMA param_ty_list    { $1 :: $3 }
+
+param_ty:
+	| ty                        { ($1, None) }
+	| refined_ty                { $1 }
+
+refined_ty:
+	| IDENT COLON ty            { ($3, Some ($1, None)) }
+	| IDENT COLON ty IF expr    { ($3, Some ($1, Some $5)) }
+
+some_simple_ty:
+	| simple_ty                                                 { $1 }
+	| SOME LBRACKET ident_list RBRACKET simple_ty               {
 				replace_ty_constants_with_vars $3 $5
 			}
 
 simple_ty:
-	| atomic_ty                                                 { $1 }
-	| SOME LBRACKET ident_list RBRACKET atomic_ty               {
-				replace_ty_constants_with_vars $3 $5
-			}
-
-atomic_ty:
-	| IDENT                                         { STConst $1 }
-	| IDENT LBRACKET ty_comma_list RBRACKET         { STApp($1, $3) }
+	| IDENT                                         { TConst $1 }
+	| IDENT LBRACKET ty_comma_list RBRACKET         { TApp($1, $3) }
 	| LPAREN ty RPAREN                              { $2 }
 	
 ty_comma_list:
