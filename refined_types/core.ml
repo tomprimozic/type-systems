@@ -35,6 +35,7 @@ open Infer
 			("is_empty", "forall[t] (a : array[t]) -> (b : bool if b == (length(a) == 0))");
 			("fac", "(i : int if i >= 0) -> (j : int if j > 0 and j >= i)");
 			("succ", "(i : int) -> (j : int if j == i + 1)");
+			("random1toN", "(N : int if N >= 1) -> (i : int if 1 <= i and i <= N)");
 
 			("make_const", "forall[a b] (x : a) -> b -> (y : a if y == x)");
 

@@ -20,10 +20,31 @@ let test_cases = [
 		("let x = 0 in 1 / x", fail);
 		("1 / 1", OK);
 		("let x = 1 in 1 / x", OK);
-(*
+		("1 / succ(0)", OK);
+		("random1toN(-1)", fail);
+		("1 / random1toN(5)", OK);
+		("if 2 > 1 then 1 else 1 / 0", OK);
+		("let x = random1toN(10) in if x > 5 then 1 / (x - 5) else 1 / (6 - x)", OK);
+		("let x = random1toN(1000) in " ^
+		 " let z = " ^
+		 "  if x > 10 then " ^
+		 "   let n = random1toN(x) in " ^
+		 "   n - 2 * x " ^
+		 "  else " ^
+		 "   let m = random1toN(10) + 10 in " ^
+		 "   m - x " ^
+		 " in " ^
+		 " 1 / z", OK);
+		("let x = random1toN(100) in let y = random1toN(100) in " ^
+		 "if x > 0 then " ^
+		 " if y > 0 then " ^
+		 "  1 / x + 1 / y " ^
+		 " else " ^
+		 "  1 / x + y " ^
+		 "else " ^
+		 " x + y", OK);
 		("fun (x : int) -> 1 / x", fail);
 		("fun (x : int if x > 0) -> 1 / x", OK);
-*)
 	]
 
 

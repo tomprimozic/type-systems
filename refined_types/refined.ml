@@ -124,21 +124,6 @@ let translate_builtin fn args =
 		| "==" -> "(= " ^ args_string ^ ")"
 		| _ -> "(" ^ fn ^ " " ^ args_string ^ ")"
 
-let rec translate local_env expr =
-	check_expr_ty expr ;
-	match expr.shape with
-	| EVar name ->
-			if StringMap.mem name local_env
-				then StringMap.find name local_env
-				else name
-	| EInt i -> string_of_int i
-	| EBool b -> string_of_bool b
-	| ECall({shape = EVar fn_name; ty = _}, arg_list) ->
-			if not (StringSet.mem fn_name builtins) then error "translate NI only builtins" else
-			if fn_name == "/" then error "translate NI /" else 
-			translate_builtin fn_name (List.map (translate local_env) arg_list)
-	| _ -> error "translate NI check_contract"
-
 let declare_var name ty =
 	let translated_ty = translate_ty ty in
 	Z3.write ("(declare-const " ^ name ^ " " ^ translated_ty ^ ")")
@@ -159,16 +144,30 @@ let declare_new_var ty =
 	let var_name = "_" ^ var_name ^ (string_of_int var_number) in
 	declare_var var_name ty ;
 	var_name
-			
 
-let check_contract local_env contract =
+(* not sure if we need this *)
+(*
+let assert_true if_clause x = match if_clause with
+	| None -> Z3.write ("(assert " ^ x ^ ")")
+	| Some f -> Z3.write ("(assert (=> " ^ f ^ " " ^ x ^ "))")
+*)
+
+let assert_true if_clause x = Z3.write ("(assert " ^ x ^ ")")
+
+let assert_eq if_clause name ex = assert_true if_clause ("(= " ^ name ^ " " ^ ex ^ ")")
+
+let rec check_contract if_clause local_env contract =
 	Z3.push_pop (fun () ->
-		Z3.write ("(assert (not " ^ translate local_env contract ^ "))") ;
+		begin match if_clause with
+			| None -> ()
+			| Some f -> Z3.write ("(assert " ^ f ^ ")")
+		end ;
+		Z3.write ("(assert (not " ^ check_expr false if_clause local_env contract ^ "))") ;
 		Z3.write "(check-sat)") ;
 	let answer = Z3.read () in
 	if answer <> "unsat" then error ("Z3 returned " ^ answer)
 
-let rec check_expr simple local_env expr = match expr.shape with
+and check_expr simple if_clause local_env expr = match expr.shape with
 	| EVar name -> 
 			if StringMap.mem name local_env
 				then StringMap.find name local_env
@@ -178,13 +177,13 @@ let rec check_expr simple local_env expr = match expr.shape with
 	| ECast(expr, ty, Some refined_expr) ->
 			let ty = get_real_ty ty in
 			if (ty <> t_bool) && (ty <> t_int) then error ("not implemented - check_expr cast " ^ string_of_plain_ty ty) else
-			check_contract local_env refined_expr ;
-			check_expr simple local_env expr
+			check_contract if_clause local_env refined_expr ;
+			check_expr simple if_clause local_env expr
 	| ELet(var_name, value_expr, body_expr) ->
 			declare_var var_name value_expr.ty ;
-			let translated_value = check_expr false local_env value_expr in
-			Z3.write ("(assert (= " ^ var_name ^ " " ^ translated_value ^ "))") ;
-			check_expr simple local_env body_expr
+			let translated_value = check_expr false if_clause local_env value_expr in
+			assert_eq if_clause var_name translated_value ;
+			check_expr simple if_clause local_env body_expr
 	| ECall({shape = EVar fn_name; ty = _}, arg_expr_list) -> begin
 			let param_ty_list, refined_return_ty = match Env.lookup Core.env fn_name with
 				| TArrow(param_ty_list, refined_return_ty) -> (param_ty_list, refined_return_ty)
@@ -193,14 +192,14 @@ let rec check_expr simple local_env expr = match expr.shape with
 			let rev_translated_arg_list, new_local_env = List.fold_left2
 				(fun (rev_translated_arg_list, local_env) (param_ty, name_and_refined_expr) arg_expr ->
 					let new_local_env, translated_arg = match name_and_refined_expr with
-						| None -> (local_env, check_expr false local_env arg_expr)
+						| None -> (local_env, check_expr false if_clause local_env arg_expr)
 						| Some (name, None) ->
-								let translated_arg = check_expr true local_env arg_expr in
+								let translated_arg = check_expr true if_clause local_env arg_expr in
 								(StringMap.add name translated_arg local_env, translated_arg)
 						| Some (name, Some refined_expr) ->
-								let translated_arg = check_expr true local_env arg_expr in
+								let translated_arg = check_expr true if_clause local_env arg_expr in
 								let new_local_env = StringMap.add name translated_arg local_env in
-								check_contract new_local_env refined_expr ;
+								check_contract if_clause new_local_env refined_expr ;
 								(new_local_env, translated_arg)
 					in
 					(translated_arg :: rev_translated_arg_list, new_local_env))
@@ -212,7 +211,7 @@ let rec check_expr simple local_env expr = match expr.shape with
 					let translated_expr = translate_builtin fn_name translated_arg_list in
 					if simple then
 						let var_name = declare_new_var return_ty in
-						Z3.write ("(assert (= " ^ var_name ^ " " ^ translated_expr ^ "))") ;
+						assert_eq if_clause var_name translated_expr ;
 						var_name
 					else
 						translated_expr
@@ -222,10 +221,58 @@ let rec check_expr simple local_env expr = match expr.shape with
 					| None | Some (_, None) -> declare_new_var return_ty
 					| Some(name, Some refined_expr) ->
 							let var_name = declare_new_var return_ty in
-							let translated_refined_expr = check_expr false new_local_env refined_expr in
-							Z3.write ("(assert (= " ^ var_name ^ " " ^ translated_refined_expr ^ "))") ;
+							let return_ty_local_env = StringMap.add name var_name new_local_env in
+							let translated_refined_expr =
+								check_expr false if_clause return_ty_local_env refined_expr
+							in
+							assert_true if_clause translated_refined_expr ;
 							var_name
 		end
+	| EIf(if_expr, then_expr, else_expr) ->
+			let translated_if_expr = check_expr true if_clause local_env if_expr in
+			let then_if_clause = Some (match if_clause with
+				| None -> translated_if_expr
+				| Some f -> "(and " ^ f ^ " " ^ translated_if_expr ^ ")")
+			in
+			let translated_then_expr = check_expr false then_if_clause local_env then_expr in
+			let else_if_clause = Some (match if_clause with
+				| None -> "(not " ^ translated_if_expr ^ ")"
+				| Some f -> "(and " ^ f ^ " (not " ^ translated_if_expr ^ "))")
+			in
+			let translated_else_expr = check_expr false else_if_clause local_env else_expr in
+			let translated_if_expr =
+				"(ite " ^ translated_if_expr ^ " " ^ translated_then_expr ^ " " ^ translated_else_expr ^ ")"
+			in
+			if simple then
+				let var_name = declare_new_var expr.ty in
+				assert_eq if_clause var_name translated_if_expr ;
+				var_name
+			else
+				translated_if_expr
+	| EFun(param_list, maybe_refined_return_ty, body_expr) ->
+			Z3.push_pop (fun () ->
+				List.iter
+					(fun (param_name, param_ty, maybe_refined_expr) ->
+						declare_var param_name param_ty ;
+						match maybe_refined_expr with
+							| None -> ()
+							| Some refined_expr ->
+									assert_true if_clause (check_expr false if_clause local_env refined_expr))
+					param_list
+				;
+				ignore (match maybe_refined_return_ty with
+					| None -> check_expr false if_clause local_env body_expr
+					| Some (ty, None) -> check_expr false if_clause local_env body_expr
+					| Some (ty, Some (name, refined_expr)) ->
+							let translated_body = check_expr true if_clause local_env body_expr in
+							let new_local_env = StringMap.add name translated_body local_env in
+							let translated_refined_expr =
+								check_expr false if_clause new_local_env refined_expr
+							in
+							assert_true if_clause translated_refined_expr ;
+							translated_body)
+			) ;
+			""
 	| _ -> error "not implemented - check_expr"
 	
 
@@ -253,4 +300,4 @@ and t_param = name * t_ty * t_expr option
 
 let prove expr =
 	Z3.start () ;
-	Z3.push_pop (fun () -> ignore (check_expr false StringMap.empty expr)) ;
+	Z3.push_pop (fun () -> ignore (check_expr false None StringMap.empty expr)) ;
