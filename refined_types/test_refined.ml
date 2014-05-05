@@ -16,12 +16,12 @@ let test_cases = [
 		("1 : int if 1 != 0 and - 2 <= 2 - 1", OK);
 		("let x = 1 in 1 : int if x > 2", fail);
 		("let x = 1 in 1 : int if x + 3 > 2", OK);
-(*
 		("1 / 0", fail);
 		("let x = 0 in 1 / x", fail);
-		("fun (x : int) -> 1 / x", fail);
 		("1 / 1", OK);
 		("let x = 1 in 1 / x", OK);
+(*
+		("fun (x : int) -> 1 / x", fail);
 		("fun (x : int if x > 0) -> 1 / x", OK);
 *)
 	]
