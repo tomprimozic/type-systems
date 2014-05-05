@@ -139,6 +139,7 @@ let var_map = Hashtbl.create 5
 let declare_new_var ty =
 	let var_name = match get_real_ty ty with
 		| TConst name | TApp(name, _) -> String.make 1 (String.get name 0)
+		| TVar _ -> "v"
 		| _ -> error "declare_new_var NI types"
 	in
 	let var_number = try

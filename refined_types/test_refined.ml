@@ -46,15 +46,22 @@ let test_cases = [
 		 " x + y", OK);
 		("fun (x : int) -> 1 / x", fail);
 		("fun (x : int if x > 0) -> 1 / x", OK);
-		("fun (x : int, y : int) : (z : int if z >= x and z >= y) -> if x >= y then x else y", OK);
 		("fun (x : int, y : int) : (z : int if z >= x and z >= y) -> if x <= y then x else y", fail);
+		("fun (x : int, y : int) : (z : int if z >= x and z >= y) -> if x >= y then x else y", OK);
+		("let a = alloc(5) in 1 / (length(a) - 5)", fail);
 		("let a = alloc(5) in 1 / (length(a) + 1)", OK);
+		("fun(x : int if x >= 0) -> let y = x + 9 in let z = square(y) in 1 / (z - random1toN(99))",
+			fail);
+		("fun(x : int if x >= 0) -> let y = x + 10 in let z = square(y) in 1 / (z - random1toN(99))",
+			OK);
+		("fun(a, def) -> let l = length(a) + 1 in if l >= 1 then get(a, 0) else def", fail);
+		("fun(a, def) -> let l = length(a) + 1 in if l >= 2 then get(a, 0) else def", OK);
 		(* Heartbleed *)
 		("fun(payload : array[byte], payload_length : int) : array[byte] -> " ^
 		 " let response = alloc(payload_length) in " ^
 		 " let ignore = memcpy(response, payload, payload_length) in " ^
 		 " response", fail);
-		(* no Heartbleed *)
+		(* Heartbleed fix *)
 		("fun(payload : array[byte], " ^
 		 "    payload_length : int if length(payload) == payload_length) : array[byte] -> " ^
 		 " let response = alloc(payload_length) in " ^
