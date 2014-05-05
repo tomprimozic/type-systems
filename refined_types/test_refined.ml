@@ -12,6 +12,7 @@ let test_cases = [
 		("1 : int if true", OK);
 		("1 : int if false", fail);
 		("1 : int if 1 > 2", fail);
+		("1 : int if not 1 > 2", OK);
 		("1 : int if 1 + 5 > 2", OK);
 		("1 : int if 1 != 0 and - 2 <= 2 - 1", OK);
 		("let x = 1 in 1 : int if x > 2", fail);
@@ -45,6 +46,20 @@ let test_cases = [
 		 " x + y", OK);
 		("fun (x : int) -> 1 / x", fail);
 		("fun (x : int if x > 0) -> 1 / x", OK);
+		("fun (x : int, y : int) : (z : int if z >= x and z >= y) -> if x >= y then x else y", OK);
+		("fun (x : int, y : int) : (z : int if z >= x and z >= y) -> if x <= y then x else y", fail);
+		("let a = alloc(5) in 1 / (length(a) + 1)", OK);
+		(* Heartbleed *)
+		("fun(payload : array[byte], payload_length : int) : array[byte] -> " ^
+		 " let response = alloc(payload_length) in " ^
+		 " let ignore = memcpy(response, payload, payload_length) in " ^
+		 " response", fail);
+		(* no Heartbleed *)
+		("fun(payload : array[byte], " ^
+		 "    payload_length : int if length(payload) == payload_length) : array[byte] -> " ^
+		 " let response = alloc(payload_length) in " ^
+		 " let ignore = memcpy(response, payload, payload_length) in " ^
+		 " response", OK);
 	]
 
 

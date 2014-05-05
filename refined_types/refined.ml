@@ -64,6 +64,7 @@ module Z3 = struct
 			let c_in, c_out = Unix.open_process "z3 -smt2 -in" in
 			info := Some (Unix.getpid (), c_in, c_out) ;
 			write "(set-option :global-decls false)" ;
+			write "(declare-sort Other)" ;
 			at_exit stop
 		end
 
@@ -83,7 +84,12 @@ end
 
 let builtins =
 	List.fold_left
-		(fun names (name, ty_str) -> StringSet.add name names)
+		(fun names (name, ty_str) ->
+			begin match Env.lookup Core.env name with
+				| TArrow _ -> ()
+				| _ -> error ("builtin symbol " ^ name ^ " is not a function")
+			end ;
+			StringSet.add name names)
 		StringSet.empty Core.builtins
 
 let uninterpreted =
@@ -105,16 +111,15 @@ let primitives =
 
 
 
-let check_expr_ty expr =
-	match get_real_ty expr.ty with
-		| TConst "int" | TConst "bool" -> ()
-		| _ -> error ("only int or bool, not " ^ string_of_plain_ty expr.ty)
 
 let translate_ty ty =
 	match get_real_ty ty with
 		| TConst "int" -> "Int"
 		| TConst "bool" -> "Bool"
-		| _ -> error ("can translate only int or bool, not " ^ string_of_plain_ty ty)
+		| TConst _ -> "Other"
+		| TApp _ -> "Other"
+		| TVar _ -> "Other"
+		| TArrow _ -> error "cannot translate function types"
 
 let translate_builtin fn args =
 	let args_string = String.concat " " args in
@@ -132,8 +137,8 @@ let declare_var name ty =
 let var_map = Hashtbl.create 5
 
 let declare_new_var ty =
-	let var_name = match ty with
-		| TConst name -> String.make 1 (String.get name 0)
+	let var_name = match get_real_ty ty with
+		| TConst name | TApp(name, _) -> String.make 1 (String.get name 0)
 		| _ -> error "declare_new_var NI types"
 	in
 	let var_number = try
@@ -207,7 +212,7 @@ and check_expr simple if_clause local_env expr = match expr.shape with
 			in
 			let translated_arg_list = List.rev rev_translated_arg_list in
 			let (return_ty, return_name_and_refined_expr) = refined_return_ty in
-			if StringSet.mem fn_name builtins then begin
+			if (StringSet.mem fn_name builtins) || (StringSet.mem fn_name uninterpreted) then begin
 					let translated_expr = translate_builtin fn_name translated_arg_list in
 					if simple then
 						let var_name = declare_new_var return_ty in
@@ -266,14 +271,44 @@ and check_expr simple if_clause local_env expr = match expr.shape with
 					| Some (ty, Some (name, refined_expr)) ->
 							let translated_body = check_expr true if_clause local_env body_expr in
 							let new_local_env = StringMap.add name translated_body local_env in
-							let translated_refined_expr =
-								check_expr false if_clause new_local_env refined_expr
-							in
-							assert_true if_clause translated_refined_expr ;
+							check_contract if_clause new_local_env refined_expr ;
 							translated_body)
 			) ;
 			""
 	| _ -> error "not implemented - check_expr"
+
+let translate_uninterpreted_function fn_name fn_ty =
+	match get_real_ty fn_ty with
+		| TArrow(param_ty_list, (return_ty, return_name_and_refined_expr)) -> begin
+				let translated_param_list =
+					List.map
+						(fun (param_ty, name_and_refined_expr) ->
+							match name_and_refined_expr with
+								| None -> error "uninterpreted functions must name all their parameters"
+								| Some(name, _) -> (name, translate_ty param_ty))
+						param_ty_list
+				in
+				Z3.write (
+					"(declare-fun " ^ fn_name ^
+					" (" ^ (String.concat " " (List.map snd translated_param_list)) ^ ") " ^
+					translate_ty return_ty ^ ")") ;
+				match return_name_and_refined_expr with
+					| None | Some (_, None) -> ()
+					| Some(name, Some refined_expr) ->
+							let named_param_list = String.concat " " (List.map
+								(fun (param_name, translated_param_ty) ->
+									"(" ^ param_name ^ " " ^ translated_param_ty ^ ")")
+								translated_param_list)
+							in
+							let param_name_list = String.concat " " (List.map fst translated_param_list) in
+							let local_env =
+								StringMap.add name ("(" ^ fn_name ^ " " ^ param_name_list ^ ")") StringMap.empty
+							in
+							let translated_refined_expr = check_expr false None local_env refined_expr in
+							Z3.write
+								("(assert (forall (" ^ named_param_list ^ ") " ^ translated_refined_expr ^ "))")
+			end
+		| _ -> error "uninterpreted symbol must be a function"
 	
 
 (*
@@ -298,6 +333,17 @@ and t_expr_shape =
 and t_param = name * t_ty * t_expr option
 *)
 
+let ready = ref false
+let startup () =
+	if not !ready then begin
+		ready := true ;
+		Z3.start () ;
+		StringSet.iter
+			(fun fn_name ->
+				translate_uninterpreted_function fn_name (Env.lookup Core.env fn_name))
+			uninterpreted
+	end
+
 let prove expr =
-	Z3.start () ;
+	startup () ;
 	Z3.push_pop (fun () -> ignore (check_expr false None StringMap.empty expr)) ;
