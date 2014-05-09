@@ -13,18 +13,16 @@ let replace_ty_constants_with_vars var_name_list ty =
 		(fun env var_name -> StringMap.add var_name (new_gen_var ()) env)
 		StringMap.empty var_name_list
 	in
-	let rec f ty = match ty with
-		| TConst name -> begin
-				try
-					StringMap.find name env
+	let rec f = function
+		| TConst name as ty -> begin
+				try StringMap.find name env
 				with Not_found -> ty
 			end
-		| TVar _ -> ty
-		| TApp(name, ty_arg_list) ->
-				TApp(name, List.map f ty_arg_list)
-		| TArrow(param_refined_ty_list, return_refined_ty) ->
-				TArrow(List.map g param_refined_ty_list, g return_refined_ty)
-	and g (ty, maybe_name_and_expr) = (f ty, maybe_name_and_expr)
+		| TApp(name, arg_ty_list) -> TApp(name, List.map f arg_ty_list)
+		| TArrow(param_r_ty_list, return_r_ty) ->
+				let g = r_ty_map f in
+				TArrow(List.map g param_r_ty_list, g return_r_ty)
+		| TVar _ as ty -> ty
 	in
 	f ty
 
@@ -127,9 +125,9 @@ param:
 	| IDENT COLON ty IF expr      { ($1, Some ($3, Some $5)) }
 
 return_ty:
-	| some_simple_ty                          { ($1, None) }
-	| LPAREN IDENT COLON ty RPAREN            { ($4, Some ($2, None)) }
-	| LPAREN IDENT COLON ty IF expr RPAREN    { ($4, Some ($2, Some $6)) }
+	| some_simple_ty                          { Plain $1 }
+	| LPAREN IDENT COLON ty RPAREN            { Named($2, $4) }
+	| LPAREN IDENT COLON ty IF expr RPAREN    { Refined($2, $4, $6) }
 
 ident_list:
 	| IDENT               { [$1] }
@@ -148,12 +146,12 @@ ty:
 
 function_ty:
 	| LPAREN RPAREN ARROW function_ret_ty                               { TArrow([], $4) }
-	| simple_ty ARROW function_ret_ty                                   { TArrow([($1, None)], $3) }
+	| simple_ty ARROW function_ret_ty                                   { TArrow([Plain $1], $3) }
 	| LPAREN refined_ty RPAREN ARROW function_ret_ty                    { TArrow([$2], $5) }
 	| LPAREN param_ty COMMA param_ty_list RPAREN ARROW function_ret_ty  { TArrow($2 :: $4, $7) }
 
 function_ret_ty:
-	| ty                            { ($1, None) }
+	| ty                            { Plain $1 }
 	| LPAREN refined_ty RPAREN      { $2 }
 
 param_ty_list:
@@ -161,12 +159,12 @@ param_ty_list:
 	| param_ty COMMA param_ty_list    { $1 :: $3 }
 
 param_ty:
-	| ty                        { ($1, None) }
+	| ty                        { Plain $1 }
 	| refined_ty                { $1 }
 
 refined_ty:
-	| IDENT COLON ty            { ($3, Some ($1, None)) }
-	| IDENT COLON ty IF expr    { ($3, Some ($1, Some $5)) }
+	| IDENT COLON ty            { Named($1, $3) }
+	| IDENT COLON ty IF expr    { Refined($1, $3, $5) }
 
 some_simple_ty:
 	| simple_ty                                                 { $1 }

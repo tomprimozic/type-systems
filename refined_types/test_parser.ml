@@ -1,5 +1,6 @@
 open OUnit2
 open Expr
+open Printing
 
 type result =
 	| OK of s_expr
@@ -38,41 +39,48 @@ let test_cases = [
 	("not a or b", Fail);
 	("(not a > 0) or b",
 		OK (SCall(SVar "or", [SCall(SVar "not", [SCall(SVar ">", [SVar "a"; SInt 0])]); SVar "b"])));
-	("fun() : int -> y", OK (SFun([], Some (TConst "int", None), SVar "y")));
+	("fun() : int -> y", OK (SFun([], Some (Plain (TConst "int")), SVar "y")));
 	("1 : int", OK (SCast(SInt 1, TConst "int", None)));
 	("1 : some[a] a", OK (SCast(SInt 1, bound 0, None)));
 	("1 : some[a] array[a]", OK (SCast(SInt 1, TApp("array", [bound 0]), None)));
 	("1 : some[a b] pair[a, pair[b, array[a]]]",
 		OK (SCast(SInt 1, TApp("pair", [bound 0; TApp("pair",
 			[bound 1; TApp("array", [bound 0])])]), None)));
-	("id : some[a] a -> a", OK (SCast(SVar "id", (TArrow([(bound 0, None)], (bound 0, None))), None)));
+	("id : some[a] a -> a", OK (SCast(SVar "id", (TArrow([Plain (bound 0)], Plain (bound 0))), None)));
 	("fun(x : some[a] a, y : int -> int, z : (int -> int) if z(0) != 1) : some[a] array[a] -> 1",
-		OK (SFun([("x", Some (bound 0, None)); ("y", Some (TArrow([(TConst "int", None)],
-			(TConst "int", None)), None)); ("z", Some (TArrow([(TConst "int", None)],
-			(TConst "int", None)), Some (SCall(SVar "!=", [SCall(SVar "z", [SInt 0]); SInt 1]))))],
-			Some (TApp("array", [bound 1]), None), SInt 1)));
+		OK (SFun([("x", Some (bound 0, None)); ("y", Some (TArrow([Plain (TConst "int")],
+			Plain (TConst "int")), None)); ("z", Some (TArrow([Plain (TConst "int")],
+			Plain (TConst "int")), Some (SCall(SVar "!=", [SCall(SVar "z", [SInt 0]); SInt 1]))))],
+			Some (Plain (TApp("array", [bound 1]))), SInt 1)));
 	("fun(f : (x : int if x != 0) -> (y : int if x != y)) -> f(0)",
-		OK (SFun([("f", Some (TArrow([(TConst "int", Some ("x", Some (SCall(SVar "!=",
-			[SVar "x"; SInt 0]))))], (TConst "int", Some ("y", Some (SCall(SVar "!=",
-			[SVar "x"; SVar "y"]))))), None))], None, SCall(SVar "f", [SInt 0]))));
+		OK (SFun([("f", Some (TArrow([Refined("x", TConst "int", SCall(SVar "!=",
+			[SVar "x"; SInt 0]))], Refined("y", TConst "int", SCall(SVar "!=",
+			[SVar "x"; SVar "y"]))), None))], None, SCall(SVar "f", [SInt 0]))));
 	("b : some[a] array[a] if length(b) > 0",
 		OK (SCast(SVar "b", TApp("array", [bound 0]), Some (SCall(SVar ">", [SCall(SVar
 			"length", [SVar "b"]); SInt 0])))));
 	("plus : (x : int, y : int) -> (z : int if z == x + y)",
-		OK (SCast(SVar "plus", TArrow([(TConst "int", Some ("x", None)); (TConst "int",
-			Some ("y", None))], (TConst "int", Some ("z", Some (SCall(SVar "==",
-			[SVar "z"; SCall(SVar "+", [SVar "x"; SVar "y"])]))))), None)));
+		OK (SCast(SVar "plus", TArrow([Named("x", TConst "int"); Named("y", TConst "int")],
+			Refined("z", TConst "int", SCall(SVar "==", [SVar "z"; SCall(SVar "+",
+			[SVar "x"; SVar "y"])]))), None)));
 	("f : (x : int if x > 0) -> ((y : int) -> (z : int if z == x + y))",
-		OK (SCast(SVar "f", TArrow([(TConst "int", Some ("x", Some (SCall(SVar ">", [SVar "x";
-			SInt 0]))))], (TArrow([(TConst "int", Some ("y", None))], (TConst "int", Some ("z",
-			Some (SCall(SVar "==", [SVar "z"; SCall(SVar "+", [SVar "x"; SVar "y"])]))))), None)), None)));
+		OK (SCast(SVar "f", TArrow([Refined("x", TConst "int", SCall(SVar ">", [SVar "x";
+			SInt 0]))], Plain (TArrow([Named("y", TConst "int")], Refined("z", TConst "int",
+			SCall(SVar "==", [SVar "z"; SCall(SVar "+", [SVar "x"; SVar "y"])]))))), None)));
+	("fun() : ((x : int if x > 0) -> int) -> id",
+		OK (SFun([], Some (Plain (TArrow([Refined("x", TConst "int", SCall(SVar ">",
+			[SVar "x"; SInt 0]))], Plain (TConst "int")))), SVar "id")));
+	("fun(f : (int -> (x : int if x > 0)) if f(0) > 1) -> 1",
+		OK (SFun([("f", Some (TArrow([Plain (TConst "int")], Refined("x", TConst "int",
+			SCall(SVar ">", [SVar "x"; SInt 0]))), Some (SCall(SVar ">", [SCall(SVar "f",
+			[SInt 0]); SInt 1]))))], None, SInt 1)));
 	]
 
 
 
 let string_of_result = function
 	| Fail -> "Fail"
-	| OK expr -> "OK (" ^ string_of_expr expr ^ ")"
+	| OK s_expr -> "OK (" ^ string_of_s_expr s_expr ^ ")"
 
 let make_single_test_case (code, expected_result) =
 	String.escaped code >:: fun _ ->
@@ -83,21 +91,17 @@ let make_single_test_case (code, expected_result) =
 			with Parsing.Parse_error ->
 				Fail
 		in
-(*
-		assert_equal ~printer:string_of_result expected_result result
-*)
 		assert_equal ~printer:string_of_result expected_result result ;
 		match result with
-			| OK expr -> begin
-					let expr_str = string_of_expr expr in
-(*					assert_equal ~printer:(fun x -> x) code expr_str ; *)
-					Infer.reset_id() ;
+			| OK s_expr -> begin
+					let s_expr_str = string_of_s_expr s_expr in
+					Infer.reset_id () ;
 					try
-						let new_result = OK (Parser.expr_eof Lexer.token (Lexing.from_string expr_str)) in
-						assert_equal ~printer:string_of_result ~msg:"string_of_expr error"
+						let new_result = OK (Parser.expr_eof Lexer.token (Lexing.from_string s_expr_str)) in
+						assert_equal ~printer:string_of_result ~msg:"string_of_s_expr error"
 							expected_result new_result
 					with Parsing.Parse_error ->
-						assert_failure ("string_of_expr parsing error: " ^ expr_str)
+						assert_failure ("string_of_s_expr parsing error: " ^ s_expr_str)
 				end
 			| Fail -> ()
 

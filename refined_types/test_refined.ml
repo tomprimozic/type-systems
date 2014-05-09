@@ -56,6 +56,15 @@ let test_cases = [
 			OK);
 		("fun(a, def) -> let l = length(a) + 1 in if l >= 1 then get(a, 0) else def", fail);
 		("fun(a, def) -> let l = length(a) + 1 in if l >= 2 then get(a, 0) else def", OK);
+		("fun(a) -> head(a)", fail);
+		("fun(a) -> if length(a) >= 1 then head(a) else -1", OK);
+		("fun(a) -> if length(a) >= 1 then head1(a) else -1", OK);
+		("fun(a) -> if not is_empty(a) then head1(a) else -1", OK);
+		("fun(a) -> if my_not(is_empty(a)) then head1(a) else -1", OK);
+		("fun(a) -> if is_empty(a) then head1(a) else -1", fail);
+		("fun(a) -> if is_empty(a) then -1 else head(a)", OK);
+		("fun(a : some[b] b if length(a) >= 1) -> head1(a)", OK);
+		("fun(a : some[b] b if my_not(is_empty(a))) -> head(a)", OK);
 		(* Heartbleed *)
 		("fun(payload : array[byte], payload_length : int) : array[byte] -> " ^
 		 " let response = alloc(payload_length) in " ^
@@ -87,8 +96,8 @@ let make_single_test_case (code, expected_result) =
 		let result =
 			try
 				let expr = Parser.expr_eof Lexer.token (Lexing.from_string code) in
-				let t_expr = Infer.infer Core.plain_env 0 expr in
-				Refined.prove t_expr ;
+				let t_expr = Infer.infer_expr Core.plain_env 0 expr in
+				Refined.check t_expr ;
 				OK
 			with Refined.Error msg ->
 				Fail (Some msg)

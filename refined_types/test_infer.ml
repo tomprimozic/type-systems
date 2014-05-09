@@ -1,5 +1,6 @@
 open OUnit2
 open Expr
+open Printing
 
 type result =
 	| OK of string
@@ -8,7 +9,7 @@ type result =
 let fail = Fail None
 let error msg = Fail (Some msg)
 
-let test_cases = [
+let test_infer = [
 	(* Hindley-Milner *)
 	("id", OK "forall[a] a -> a");
 	("1", OK "int");
@@ -61,6 +62,15 @@ let test_cases = [
 	("fun(x : some[a] a if x, y : some[a] a) : (z : bool if y) -> x", OK " (bool, bool) -> bool");
 	]
 
+let test_infer_and_syntax = [
+	(* Function string_of_t_expr prints a typed syntax tree where all function
+		arguments already have known types, so in all these test cases all parameters
+		must have fully annotated types. *)
+	("fun(x : int) -> x + 1", OK "int -> int");
+	("fun() : ((x : int if x > 0) -> int) -> id", OK "() -> int -> int");
+	("fun() : (x : int if x > 0) -> 1", OK "() -> int");
+]
+
 
 
 let string_of_result = function
@@ -68,7 +78,7 @@ let string_of_result = function
 	| Fail (Some msg) -> "Fail " ^ msg
 	| OK ty_str -> "OK " ^ ty_str
 
-let normalize ty_str = string_of_ty (Parser.ty_forall_eof Lexer.token (Lexing.from_string ty_str))
+let normalize ty_str = string_of_s_ty (Parser.ty_forall_eof Lexer.token (Lexing.from_string ty_str))
 
 let cmp_result result1 result2 = match (result1, result2) with
 	| Fail None, Fail _ | Fail _, Fail None -> true
@@ -76,21 +86,37 @@ let cmp_result result1 result2 = match (result1, result2) with
 	| OK ty_str1, OK ty_str2 -> (normalize ty_str1) = (normalize ty_str2)
 	| _ -> false
 
-let make_single_test_case (code, expected_result) =
+let make_single_test_case check_typed_syntax (code, expected_result) =
 	String.escaped code >:: fun _ ->
-		let result =
+		Infer.reset_id () ;
+		let original_s_expr = Parser.expr_eof Lexer.token (Lexing.from_string code) in
+		let (result, maybe_t_expr) =
 			try
-				Infer.reset_id () ;
-				let expr = Parser.expr_eof Lexer.token (Lexing.from_string code) in
-				let t_expr = Infer.infer Core.plain_env 0 expr in
-				let ty = t_expr.ty in
-				let generalized_ty = Infer.generalize (-1) ty in
-				OK (string_of_plain_ty generalized_ty)
+				let t_expr = Infer.infer_expr Core.plain_env 0 original_s_expr in
+				let t_ty = t_expr.ty in
+				let generalized_ty = Infer.generalize (-1) t_ty in
+				(OK (string_of_t_ty generalized_ty), Some t_expr)
 			with Infer.Error msg ->
-				Fail (Some msg)
+				(Fail (Some msg), None)
 		in
-		assert_equal ~printer:string_of_result ~cmp:cmp_result expected_result result
+		assert_equal ~printer:string_of_result ~cmp:cmp_result expected_result result ;
+		if check_typed_syntax then match maybe_t_expr with
+			| Some t_expr -> begin
+					let t_expr_str = string_of_t_expr t_expr in
+					Infer.reset_id () ;
+					try
+						let new_s_expr = Parser.expr_eof Lexer.token (Lexing.from_string t_expr_str) in
+						assert_equal ~printer:string_of_s_expr ~msg:"string_of_t_expr error"
+							original_s_expr new_s_expr
+					with Parsing.Parse_error ->
+						assert_failure  ("string_of_t_expr parsing error: " ^ t_expr_str)
+				end
+			| None -> ()
 
 let suite =
-	"test_infer" >::: List.map make_single_test_case test_cases
+	"test_infer" >:::
+		List.flatten [
+				(*List.map (make_single_test_case false) test_infer;*)
+				List.map (make_single_test_case true) test_infer_and_syntax;
+			]
 

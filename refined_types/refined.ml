@@ -1,4 +1,5 @@
 open Expr
+open Printing
 
 module StringSet = Set.Make(String)
 module StringMap = Map.Make(String)
@@ -85,7 +86,7 @@ end
 let builtins =
 	List.fold_left
 		(fun names (name, ty_str) ->
-			begin match Env.lookup Core.env name with
+			begin match Env.lookup name Core.env with
 				| TArrow _ -> ()
 				| _ -> error ("builtin symbol " ^ name ^ " is not a function")
 			end ;
@@ -95,7 +96,7 @@ let builtins =
 let uninterpreted =
 	List.fold_left
 		(fun names (name, ty_str) ->
-			begin match Env.lookup Core.env name with
+			begin match Env.lookup name Core.env with
 				| TArrow _ -> ()
 				| _ -> error ("uninterpreted symbol " ^ name ^ " is not a function")
 			end ;
@@ -113,7 +114,7 @@ let primitives =
 
 
 let translate_ty ty =
-	match get_real_ty ty with
+	match real_ty ty with
 		| TConst "int" -> "Int"
 		| TConst "bool" -> "Bool"
 		| TConst _ -> "Other"
@@ -137,7 +138,7 @@ let declare_var name ty =
 let var_map = Hashtbl.create 5
 
 let declare_new_var ty =
-	let var_name = match get_real_ty ty with
+	let var_name = match real_ty ty with
 		| TConst name | TApp(name, _) -> String.make 1 (String.get name 0)
 		| TVar _ -> "v"
 		| _ -> error "declare_new_var NI types"
@@ -180,10 +181,10 @@ and check_expr simple if_clause local_env expr = match expr.shape with
 				else name
 	| EBool b -> string_of_bool b
 	| EInt i -> string_of_int i
-	| ECast(expr, ty, Some refined_expr) ->
-			let ty = get_real_ty ty in
-			if (ty <> t_bool) && (ty <> t_int) then error ("not implemented - check_expr cast " ^ string_of_plain_ty ty) else
-			check_contract if_clause local_env refined_expr ;
+	| ECast(expr, ty, Some contract_expr) ->
+			let ty = real_ty ty in
+			if (ty <> t_bool) && (ty <> TConst "int") then error ("not implemented - check_expr cast " ^ string_of_t_ty ty) else
+			check_contract if_clause local_env contract_expr ;
 			check_expr simple if_clause local_env expr
 	| ELet(var_name, value_expr, body_expr) ->
 			declare_var var_name value_expr.ty ;
@@ -191,41 +192,40 @@ and check_expr simple if_clause local_env expr = match expr.shape with
 			assert_eq if_clause var_name translated_value ;
 			check_expr simple if_clause local_env body_expr
 	| ECall({shape = EVar fn_name; ty = _}, arg_expr_list) -> begin
-			let param_ty_list, refined_return_ty = match Env.lookup Core.env fn_name with
-				| TArrow(param_ty_list, refined_return_ty) -> (param_ty_list, refined_return_ty)
+			let param_r_ty_list, return_r_ty = match Env.lookup fn_name Core.env with
+				| TArrow(param_r_ty_list, return_r_ty) -> (param_r_ty_list, return_r_ty)
 				| _ -> assert false
 			in
 			let rev_translated_arg_list, new_local_env = List.fold_left2
-				(fun (rev_translated_arg_list, local_env) (param_ty, name_and_refined_expr) arg_expr ->
-					let new_local_env, translated_arg = match name_and_refined_expr with
-						| None -> (local_env, check_expr false if_clause local_env arg_expr)
-						| Some (name, None) ->
+				(fun (rev_translated_arg_list, local_env) param_r_ty arg_expr ->
+					let new_local_env, translated_arg = match param_r_ty with
+						| Plain _ -> (local_env, check_expr false if_clause local_env arg_expr)
+						| Named(name, _) ->
 								let translated_arg = check_expr true if_clause local_env arg_expr in
 								(StringMap.add name translated_arg local_env, translated_arg)
-						| Some (name, Some refined_expr) ->
+						| Refined(name, _, refined_expr) ->
 								let translated_arg = check_expr true if_clause local_env arg_expr in
 								let new_local_env = StringMap.add name translated_arg local_env in
 								check_contract if_clause new_local_env refined_expr ;
 								(new_local_env, translated_arg)
 					in
 					(translated_arg :: rev_translated_arg_list, new_local_env))
-				([], local_env) param_ty_list arg_expr_list
+				([], local_env) param_r_ty_list arg_expr_list
 			in
 			let translated_arg_list = List.rev rev_translated_arg_list in
-			let (return_ty, return_name_and_refined_expr) = refined_return_ty in
 			if (StringSet.mem fn_name builtins) || (StringSet.mem fn_name uninterpreted) then begin
 					let translated_expr = translate_builtin fn_name translated_arg_list in
 					if simple then
-						let var_name = declare_new_var return_ty in
+						let var_name = declare_new_var (plain_ty return_r_ty) in
 						assert_eq if_clause var_name translated_expr ;
 						var_name
 					else
 						translated_expr
 				end
 			else
-				match return_name_and_refined_expr with
-					| None | Some (_, None) -> declare_new_var return_ty
-					| Some(name, Some refined_expr) ->
+				match return_r_ty with
+					| Plain return_ty | Named(_, return_ty) -> declare_new_var return_ty
+					| Refined(name, return_ty, refined_expr) ->
 							let var_name = declare_new_var return_ty in
 							let return_ty_local_env = StringMap.add name var_name new_local_env in
 							let translated_refined_expr =
@@ -268,34 +268,34 @@ and check_expr simple if_clause local_env expr = match expr.shape with
 				;
 				ignore (match maybe_refined_return_ty with
 					| None -> check_expr false if_clause local_env body_expr
-					| Some (ty, None) -> check_expr false if_clause local_env body_expr
-					| Some (ty, Some (name, refined_expr)) ->
+					| Some (Plain ty) | Some (Named(_, ty)) -> check_expr false if_clause local_env body_expr
+					| Some (Refined(name, ty, refined_expr)) ->
 							let translated_body = check_expr true if_clause local_env body_expr in
 							let new_local_env = StringMap.add name translated_body local_env in
 							check_contract if_clause new_local_env refined_expr ;
 							translated_body)
 			) ;
 			""
-	| _ -> error "not implemented - check_expr"
+	| _ -> error ("not implemented - check_expr - " ^ string_of_t_expr expr)
 
 let translate_uninterpreted_function fn_name fn_ty =
-	match get_real_ty fn_ty with
-		| TArrow(param_ty_list, (return_ty, return_name_and_refined_expr)) -> begin
+	match real_ty fn_ty with
+		| TArrow(param_r_ty_list, return_r_ty) -> begin
 				let translated_param_list =
 					List.map
-						(fun (param_ty, name_and_refined_expr) ->
-							match name_and_refined_expr with
-								| None -> error "uninterpreted functions must name all their parameters"
-								| Some(name, _) -> (name, translate_ty param_ty))
-						param_ty_list
+						(function
+							| Plain _ -> error "uninterpreted functions must name all their parameters"
+							| Named(name, param_ty) | Refined(name, param_ty, _) ->
+									(name, translate_ty param_ty))
+						param_r_ty_list
 				in
 				Z3.write (
 					"(declare-fun " ^ fn_name ^
 					" (" ^ (String.concat " " (List.map snd translated_param_list)) ^ ") " ^
-					translate_ty return_ty ^ ")") ;
-				match return_name_and_refined_expr with
-					| None | Some (_, None) -> ()
-					| Some(name, Some refined_expr) ->
+					translate_ty (plain_ty return_r_ty) ^ ")") ;
+				match return_r_ty with
+					| Plain _ | Named _ -> ()
+					| Refined(name, return_ty, refined_expr) ->
 							let named_param_list = String.concat " " (List.map
 								(fun (param_name, translated_param_ty) ->
 									"(" ^ param_name ^ " " ^ translated_param_ty ^ ")")
@@ -341,10 +341,10 @@ let startup () =
 		Z3.start () ;
 		StringSet.iter
 			(fun fn_name ->
-				translate_uninterpreted_function fn_name (Env.lookup Core.env fn_name))
+				translate_uninterpreted_function fn_name (Env.lookup fn_name Core.env))
 			uninterpreted
 	end
 
-let prove expr =
+let check expr =
 	startup () ;
 	Z3.push_pop (fun () -> ignore (check_expr false None StringMap.empty expr)) ;
