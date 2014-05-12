@@ -1,106 +1,65 @@
 open Expr
 open Printing
+open Smt
 
 module StringSet = Set.Make(String)
 module StringMap = Map.Make(String)
-module Env = Infer.Env
 
-let log_Z3_input = false
+module Env = Infer.Env
 
 
 exception Error of string
 let error msg = raise (Error msg)
 
 
-module Z3 = struct
-	let info = ref None
-	let log = ref ""
-	let stack = ref 0
+type result = Term | Formula
 
-	let is_started () = None != !info
 
-	let stop () =
-		match !info with
-			| None -> error "Z3 not running"
-			| Some(pid, c_in, c_out) ->
-				if Unix.getpid () = pid then begin
-					let process_status = Unix.close_process (c_in, c_out) in
-					begin match process_status with
-						| Unix.WEXITED 0 -> ()
-						| Unix.WEXITED exit_code -> Printf.printf "Z3 exited with exit code %i\n" exit_code
-						| Unix.WSIGNALED signal -> Printf.printf "Z3 was killed by a signal %i\n" signal
-						| Unix.WSTOPPED signal -> Printf.printf "Z3 was stopped by a signal %i\n" signal
-					end ;
-					if (process_status <> Unix.WEXITED 0) || log_Z3_input then begin
-						print_endline "\n\nZ3 LOG\n" ;
-						print_endline !log
-					end ;
-					if !stack != 0 then Printf.printf "\nERROR: STACK = %i\n\n" !stack
-				end ;
-				info := None
+module LocalEnv = struct
+	type env = string StringMap.t
 
-	let get_out_channel () =
-		match !info with
-			| None -> error "Z3 not running"
-			| Some (_, _, c_out) -> c_out
-
-	let get_in_channel () =
-		match !info with
-			| None -> error "Z3 not running"
-			| Some (_, c_in, _) -> c_in
-
-	let read () =
-		let c_in = get_in_channel () in
-		input_line c_in
-
-	let write str =
-		let c_out = get_out_channel () in
-		output_string c_out str ;
-		output_char c_out '\n' ;
-		flush c_out ;
-		log := !log ^ str ^ "\n"
-
-	let start () =
-		if not (is_started ()) then begin
-			let c_in, c_out = Unix.open_process "z3 -smt2 -in" in
-			info := Some (Unix.getpid (), c_in, c_out) ;
-			write "(set-option :global-decls false)" ;
-			write "(declare-sort Other)" ;
-			at_exit stop
-		end
-
-	let push () = write "(push)" ; incr stack
-	let pop () = write "(pop)\n" ; decr stack
-
-	let push_pop (fn : unit -> unit) : unit =
-		push () ;
-		begin
-			try
-				fn ()
-			with e -> pop () ; raise e
-		end ;
-		pop ()
+	let empty : env = StringMap.empty
+	let extend name ty env = StringMap.add name ty env
+	let lookup name env =
+		try
+			StringMap.find name env
+		with Not_found ->
+			name
 end
+
+module FnEnv = struct
+	type env = (LocalEnv.env * t_ty) StringMap.t
+
+	let empty : env = StringMap.empty
+	let extend name local_env_and_ty env =
+		if StringMap.mem name env then error ("duplicate variable name \"" ^ name ^ "\"") else
+		StringMap.add name local_env_and_ty env
+	let lookup name env = StringMap.find name env
+
+	let map f env = StringMap.map f env
+end
+
+
+
+
 
 
 let builtins =
 	List.fold_left
 		(fun names (name, ty_str) ->
-			begin match Env.lookup name Core.env with
-				| TArrow _ -> ()
-				| _ -> error ("builtin symbol " ^ name ^ " is not a function")
-			end ;
-			StringSet.add name names)
+			if not (is_function_ty (Env.lookup name Core.env)) then
+				error ("builtin symbol " ^ name ^ " must be a function")
+			else
+				StringSet.add name names)
 		StringSet.empty Core.builtins
 
 let uninterpreted =
 	List.fold_left
 		(fun names (name, ty_str) ->
-			begin match Env.lookup name Core.env with
-				| TArrow _ -> ()
-				| _ -> error ("uninterpreted symbol " ^ name ^ " is not a function")
-			end ;
-			StringSet.add name names)
+			if not (is_function_ty (Env.lookup name Core.env)) then
+				error ("uninterpreted symbol " ^ name ^ " must be a function")
+			else
+				StringSet.add name names)
 		StringSet.empty Core.uninterpreted
 
 let primitives =
@@ -112,31 +71,35 @@ let primitives =
 
 
 
+let translate_bool = string_of_bool
+
+let translate_int = string_of_int
 
 let translate_ty ty =
 	match real_ty ty with
 		| TConst "int" -> "Int"
 		| TConst "bool" -> "Bool"
-		| TConst _ -> "Other"
-		| TApp _ -> "Other"
-		| TVar _ -> "Other"
+		| TConst _ | TApp _ | TVar _ -> "Other"
 		| TArrow _ -> error "cannot translate function types"
 
-let translate_builtin fn args =
-	let args_string = String.concat " " args in
-	match fn with
-		| "unary-" -> "(- " ^ args_string ^ ")"
-		| "!=" -> "(not (= " ^ args_string ^ "))"
-		| "==" -> "(= " ^ args_string ^ ")"
-		| _ -> "(" ^ fn ^ " " ^ args_string ^ ")"
+let translate_builtin_and_uninterpreted fn_name translated_arg_list =
+	assert (StringSet.mem fn_name builtins || StringSet.mem fn_name uninterpreted) ;
+	let args = String.concat " " translated_arg_list in
+	match fn_name with
+		| "unary-" -> "(- " ^ args ^ ")"
+		| "!=" -> "(not (= " ^ args ^ "))"
+		| "==" -> "(= " ^ args ^ ")"
+		| _ -> "(" ^ fn_name ^ " " ^ args ^ ")"
+
+
+
 
 let declare_var name ty =
 	let translated_ty = translate_ty ty in
-	Z3.write ("(declare-const " ^ name ^ " " ^ translated_ty ^ ")")
+	Smt.write ("(declare-const " ^ name ^ " " ^ translated_ty ^ ")")
 
 
-let var_map = Hashtbl.create 5
-
+let var_name_map = Hashtbl.create 5
 let declare_new_var ty =
 	let var_name = match real_ty ty with
 		| TConst name | TApp(name, _) -> String.make 1 (String.get name 0)
@@ -144,207 +107,274 @@ let declare_new_var ty =
 		| _ -> error "declare_new_var NI types"
 	in
 	let var_number = try
-			Hashtbl.find var_map var_name
+			Hashtbl.find var_name_map var_name
 		with Not_found -> 0
 	in
-	Hashtbl.replace var_map var_name (var_number + 1) ;
+	Hashtbl.replace var_name_map var_name (var_number + 1) ;
 	let var_name = "_" ^ var_name ^ (string_of_int var_number) in
 	declare_var var_name ty ;
 	var_name
 
+
+
+
 (* not sure if we need this *)
 (*
 let assert_true if_clause x = match if_clause with
-	| None -> Z3.write ("(assert " ^ x ^ ")")
-	| Some f -> Z3.write ("(assert (=> " ^ f ^ " " ^ x ^ "))")
+	| None -> Smt.write ("(assert " ^ x ^ ")")
+	| Some f -> Smt.write ("(assert (=> " ^ f ^ " " ^ x ^ "))")
 *)
 
-let assert_true if_clause x = Z3.write ("(assert " ^ x ^ ")")
+let assert_true translated_expr = Smt.write ("(assert " ^ translated_expr ^ ")")
 
-let assert_eq if_clause name ex = assert_true if_clause ("(= " ^ name ^ " " ^ ex ^ ")")
+let assert_false translated_expr = Smt.write ("(assert (not " ^ translated_expr ^ "))")
 
-let rec check_contract if_clause local_env contract =
-	Z3.push_pop (fun () ->
-		begin match if_clause with
-			| None -> ()
-			| Some f -> Z3.write ("(assert " ^ f ^ ")")
-		end ;
-		Z3.write ("(assert (not " ^ check_expr false if_clause local_env contract ^ "))") ;
-		Z3.write "(check-sat)") ;
-	let answer = Z3.read () in
-	if answer <> "unsat" then error ("Z3 returned " ^ answer)
+let assert_eq translated_expr1 translated_expr2 =
+	assert_true ("(= " ^ translated_expr1 ^ " " ^ translated_expr2 ^ ")")
 
-and check_expr simple if_clause local_env expr = match expr.shape with
-	| EVar name -> 
-			if StringMap.mem name local_env
-				then StringMap.find name local_env
-				else name
-	| EBool b -> string_of_bool b
-	| EInt i -> string_of_int i
-	| ECast(expr, ty, Some contract_expr) ->
-			let ty = real_ty ty in
-			if (ty <> t_bool) && (ty <> TConst "int") then error ("not implemented - check_expr cast " ^ string_of_t_ty ty) else
-			check_contract if_clause local_env contract_expr ;
-			check_expr simple if_clause local_env expr
-	| ELet(var_name, value_expr, body_expr) ->
-			declare_var var_name value_expr.ty ;
-			let translated_value = check_expr false if_clause local_env value_expr in
-			assert_eq if_clause var_name translated_value ;
-			check_expr simple if_clause local_env body_expr
-	| ECall({shape = EVar fn_name; ty = _}, arg_expr_list) -> begin
-			let param_r_ty_list, return_r_ty = match Env.lookup fn_name Core.env with
-				| TArrow(param_r_ty_list, return_r_ty) -> (param_r_ty_list, return_r_ty)
-				| _ -> assert false
+
+
+let rec check_contract if_clause fn_env local_env contract_expr =
+	Smt.push_pop (fun () ->
+			begin match if_clause with
+				| Some translated_cond_expr -> assert_true translated_cond_expr
+				| None -> ()
+			end ;
+			assert_false (check_value Formula if_clause fn_env local_env contract_expr) ;
+			match Smt.check_sat () with
+				| Unsat -> (* OK *) ()
+				| Sat -> error ("Smt returned sat.")
+				| Unknown -> error ("Smt returned unknown.")
+				| Error message -> error ("Smt returned " ^ message ^ "."))
+
+
+
+
+and check_function_call if_clause fn_env local_env fn_expr arg_expr_list =
+	let (_, fn_ty) = check_function if_clause fn_env local_env fn_expr in
+	let (param_r_ty_list, return_r_ty) = match fn_ty with
+		| TArrow(param_r_ty_list, return_r_ty) -> param_r_ty_list, return_r_ty
+		| _ -> assert false
+	in
+	let rev_translated_arg_expr_list, new_local_env = List.fold_left2
+		(fun (rev_translated_arg_expr_list, local_env) param_r_ty arg_expr ->
+			let (new_local_env, translated_arg_expr) = match param_r_ty with
+				| Plain _ -> (local_env, check_value Formula if_clause fn_env local_env arg_expr)
+				| Named(name, _) ->
+						let translated_arg_expr = check_value Term if_clause fn_env local_env arg_expr in
+						(LocalEnv.extend name translated_arg_expr local_env, translated_arg_expr)
+				| Refined(name, _, expr) ->
+						let translated_arg_expr = check_value Term if_clause fn_env local_env arg_expr in
+						let new_local_env = LocalEnv.extend name translated_arg_expr local_env in
+						check_contract if_clause fn_env new_local_env expr ;
+						(new_local_env, translated_arg_expr)
 			in
-			let rev_translated_arg_list, new_local_env = List.fold_left2
-				(fun (rev_translated_arg_list, local_env) param_r_ty arg_expr ->
-					let new_local_env, translated_arg = match param_r_ty with
-						| Plain _ -> (local_env, check_expr false if_clause local_env arg_expr)
-						| Named(name, _) ->
-								let translated_arg = check_expr true if_clause local_env arg_expr in
-								(StringMap.add name translated_arg local_env, translated_arg)
-						| Refined(name, _, refined_expr) ->
-								let translated_arg = check_expr true if_clause local_env arg_expr in
-								let new_local_env = StringMap.add name translated_arg local_env in
-								check_contract if_clause new_local_env refined_expr ;
-								(new_local_env, translated_arg)
-					in
-					(translated_arg :: rev_translated_arg_list, new_local_env))
-				([], local_env) param_r_ty_list arg_expr_list
-			in
-			let translated_arg_list = List.rev rev_translated_arg_list in
-			if (StringSet.mem fn_name builtins) || (StringSet.mem fn_name uninterpreted) then begin
-					let translated_expr = translate_builtin fn_name translated_arg_list in
-					if simple then
-						let var_name = declare_new_var (plain_ty return_r_ty) in
-						assert_eq if_clause var_name translated_expr ;
-						var_name
-					else
-						translated_expr
-				end
-			else
+			(translated_arg_expr :: rev_translated_arg_expr_list, new_local_env))
+		([], local_env) param_r_ty_list arg_expr_list
+	in
+	let translated_arg_expr_list = List.rev rev_translated_arg_expr_list in
+	(return_r_ty, translated_arg_expr_list, new_local_env)
+
+
+and check_value expected_result if_clause fn_env local_env expr =
+	assert (not (is_function_ty expr.ty)) ;
+	match expr.shape with
+		| EVar name -> LocalEnv.lookup name local_env
+		| EBool b -> translate_bool b
+		| EInt i -> translate_int i
+		| ECall({shape = EVar fn_name; ty = _} as fn_expr, arg_expr_list)
+			when (StringSet.mem fn_name builtins) || (StringSet.mem fn_name uninterpreted) -> begin
+				let (return_r_ty, translated_arg_expr_list, new_local_env) =
+					check_function_call if_clause fn_env local_env fn_expr arg_expr_list
+				in
+				let translated_expr = translate_builtin_and_uninterpreted fn_name translated_arg_expr_list in
+				match expected_result with
+					| Formula -> translated_expr
+					| Term ->
+							let var_name = declare_new_var (plain_ty return_r_ty) in
+							assert_eq var_name translated_expr ;
+							var_name
+			end
+		| ECall(fn_expr, arg_expr_list) -> begin
+				let (return_r_ty, translated_arg_expr_list, new_local_env) =
+					check_function_call if_clause fn_env local_env fn_expr arg_expr_list
+				in
 				match return_r_ty with
 					| Plain return_ty | Named(_, return_ty) -> declare_new_var return_ty
-					| Refined(name, return_ty, refined_expr) ->
+					| Refined(name, return_ty, expr) ->
 							let var_name = declare_new_var return_ty in
-							let return_ty_local_env = StringMap.add name var_name new_local_env in
-							let translated_refined_expr =
-								check_expr false if_clause return_ty_local_env refined_expr
-							in
-							assert_true if_clause translated_refined_expr ;
+							let return_ty_local_env = LocalEnv.extend name var_name new_local_env in
+							let translated_expr = check_value Formula if_clause fn_env return_ty_local_env expr in
+							assert_true translated_expr ;
 							var_name
-		end
-	| EIf(if_expr, then_expr, else_expr) ->
-			let translated_if_expr = check_expr true if_clause local_env if_expr in
-			let then_if_clause = Some (match if_clause with
-				| None -> translated_if_expr
-				| Some f -> "(and " ^ f ^ " " ^ translated_if_expr ^ ")")
-			in
-			let translated_then_expr = check_expr false then_if_clause local_env then_expr in
-			let else_if_clause = Some (match if_clause with
-				| None -> "(not " ^ translated_if_expr ^ ")"
-				| Some f -> "(and " ^ f ^ " (not " ^ translated_if_expr ^ "))")
-			in
-			let translated_else_expr = check_expr false else_if_clause local_env else_expr in
-			let translated_if_expr =
-				"(ite " ^ translated_if_expr ^ " " ^ translated_then_expr ^ " " ^ translated_else_expr ^ ")"
-			in
-			if simple then
-				let var_name = declare_new_var expr.ty in
-				assert_eq if_clause var_name translated_if_expr ;
-				var_name
-			else
-				translated_if_expr
-	| EFun(param_list, maybe_refined_return_ty, body_expr) ->
-			Z3.push_pop (fun () ->
-				List.iter
-					(fun (param_name, param_ty, maybe_refined_expr) ->
-						declare_var param_name param_ty ;
-						match maybe_refined_expr with
-							| None -> ()
-							| Some refined_expr ->
-									assert_true if_clause (check_expr false if_clause local_env refined_expr))
-					param_list
-				;
-				ignore (match maybe_refined_return_ty with
-					| None -> check_expr false if_clause local_env body_expr
-					| Some (Plain ty) | Some (Named(_, ty)) -> check_expr false if_clause local_env body_expr
-					| Some (Refined(name, ty, refined_expr)) ->
-							let translated_body = check_expr true if_clause local_env body_expr in
-							let new_local_env = StringMap.add name translated_body local_env in
-							check_contract if_clause new_local_env refined_expr ;
-							translated_body)
-			) ;
-			""
-	| _ -> error ("not implemented - check_expr - " ^ string_of_t_expr expr)
+			end
+		| EFun _ -> assert false
+		| ELet(var_name, value_expr, body_expr) when not (is_function_ty value_expr.ty) ->
+				let translated_value_expr = check_value Formula if_clause fn_env local_env value_expr in
+				declare_var var_name value_expr.ty ;
+				assert_eq var_name translated_value_expr ;
+				check_value expected_result if_clause fn_env local_env body_expr
+		| ELet(fn_name, fn_expr, body_expr) (* when is_function_ty fn_expr.ty *) ->
+				let fn_local_env_ty = check_function if_clause fn_env local_env fn_expr in
+				let new_fn_env = FnEnv.extend fn_name fn_local_env_ty fn_env in
+				check_value expected_result if_clause new_fn_env local_env body_expr
+		| EIf(cond_expr, then_expr, else_expr) -> begin
+				let translated_cond_expr = check_value Term if_clause fn_env local_env cond_expr in
+				let then_if_clause, else_if_clause = match if_clause with
+					| None -> (Some translated_cond_expr, Some ("(not " ^ translated_cond_expr ^ ")"))
+					| Some translated_old_cond_expr ->
+							(
+								Some ("(and " ^ translated_old_cond_expr ^ " " ^ translated_cond_expr ^ ")"),
+								Some ("(and " ^ translated_old_cond_expr ^ " (not " ^ translated_cond_expr ^ "))")
+							)
+				in
+				let translated_then_expr = check_value Formula then_if_clause fn_env local_env then_expr in
+				let translated_else_expr = check_value Formula else_if_clause fn_env local_env else_expr in
+				let translated_if_expr =
+					"(ite " ^ translated_cond_expr ^
+						" " ^ translated_then_expr ^ " " ^ translated_else_expr ^ ")"
+				in
+				match expected_result with
+					| Formula -> translated_if_expr
+					| Term ->
+							let var_name = declare_new_var expr.ty in
+							assert_eq var_name translated_if_expr ;
+							var_name
+			end
+		| ECast(expr, ty, Some contract_expr) ->
+				let translated_expr = check_value expected_result if_clause fn_env local_env expr in
+				check_contract if_clause fn_env local_env contract_expr ;
+				translated_expr
+		| ECast(expr, ty, None) -> check_value expected_result if_clause fn_env local_env expr
 
-let translate_uninterpreted_function fn_name fn_ty =
+
+and check_function if_clause fn_env local_env expr =
+	assert (is_function_ty expr.ty) ;
+	match expr.shape with
+		| EVar name ->
+				(*assert (not ((StringSet.mem name builtins) || (StringSet.mem name uninterpreted))) ;*)
+				FnEnv.lookup name fn_env
+		| EBool _ | EInt _ -> assert false
+		| ECall _ -> error "not implemented - check_function - ECall"
+		| EFun(param_list, maybe_return_r_ty, body_expr) ->
+				Smt.push_pop (fun () ->
+					let param_r_ty_list = List.map
+						(function 
+							| (name, ty, None) ->
+									declare_var name ty ;
+									Named(name, ty)
+							| (name, ty, Some contract_expr) ->
+									declare_var name ty ;
+									assert_true (check_value Formula if_clause fn_env local_env contract_expr) ;
+									Refined(name, ty, contract_expr))
+						param_list
+					in
+					let return_r_ty = match maybe_return_r_ty with
+						| Some (Refined(name, ty, expr)) ->
+								let translated_body = check_value Term if_clause fn_env local_env body_expr in
+								let return_ty_local_env = LocalEnv.extend name translated_body local_env in
+								check_contract if_clause fn_env return_ty_local_env expr ;
+								Refined(name, ty, expr)
+						| _ ->
+								ignore (check_value Formula if_clause fn_env local_env body_expr) ;
+								Plain body_expr.ty
+					in
+					(LocalEnv.empty, TArrow(param_r_ty_list, return_r_ty)))
+(*		| EFun _ -> begin
+				ignore (check_value2 Formula if_clause fn_env local_env expr) ;
+				(LocalEnv.empty, Infer.new_var 0)
+			end *)
+		| ELet _ -> error "not implemented - check_function - ELet"
+		| EIf _ -> error "cannot use an if statement to select a function"
+		| ECast _ -> error "not implemented - check_function - ECast"
+
+
+
+let global_fn_env =
+	Env.fold
+		(fun fn_name fn_ty fn_env ->
+			if not (is_function_ty fn_ty) then
+				fn_env
+			else
+				FnEnv.extend fn_name (LocalEnv.empty, real_ty fn_ty) fn_env)
+		Core.env FnEnv.empty
+
+
+
+let declare_uninterpreted_function fn_name fn_ty =
+	(* Declares an uninterpreted symbol, for example
+
+	     length : forall[t] (a : array[t]) -> (l : int if l >= 0)
+
+	   is translated into
+
+	     (declare-fun length (Other) Int)
+	     (assert (forall ((a Other)) (>= (length a) 0)))
+	*)
 	match real_ty fn_ty with
 		| TArrow(param_r_ty_list, return_r_ty) -> begin
 				let translated_param_list =
 					List.map
 						(function
-							| Plain _ -> error "uninterpreted functions must name all their parameters"
-							| Named(name, param_ty) | Refined(name, param_ty, _) ->
-									(name, translate_ty param_ty))
+							| Plain _ -> error "all parameters of uninterpreted functions must be named"
+							| Named(name, ty) | Refined(name, ty, _) ->
+									if is_function_ty ty then
+										error "parameters of uninterpreted functions cannot be functions"
+									else
+										(name, translate_ty ty))
 						param_r_ty_list
 				in
-				Z3.write (
-					"(declare-fun " ^ fn_name ^
-					" (" ^ (String.concat " " (List.map snd translated_param_list)) ^ ") " ^
-					translate_ty (plain_ty return_r_ty) ^ ")") ;
+				if is_function_ty (plain_ty return_r_ty) then
+					error "uninterpreted functions cannot return functions" ;
+				let translated_return_ty = translate_ty (plain_ty return_r_ty) in
+				Smt.write
+					("(declare-fun " ^ fn_name ^
+						" (" ^ (String.concat " " (List.map snd translated_param_list)) ^ ") " ^
+						translated_return_ty ^ ")") ;
 				match return_r_ty with
 					| Plain _ | Named _ -> ()
-					| Refined(name, return_ty, refined_expr) ->
-							let named_param_list = String.concat " " (List.map
-								(fun (param_name, translated_param_ty) ->
+					| Refined(name, return_ty, expr) ->
+							let translated_param_list_str = String.concat " "
+								(List.map (fun (param_name, translated_param_ty) ->
 									"(" ^ param_name ^ " " ^ translated_param_ty ^ ")")
 								translated_param_list)
 							in
-							let param_name_list = String.concat " " (List.map fst translated_param_list) in
-							let local_env =
-								StringMap.add name ("(" ^ fn_name ^ " " ^ param_name_list ^ ")") StringMap.empty
-							in
-							let translated_refined_expr = check_expr false None local_env refined_expr in
-							Z3.write
-								("(assert (forall (" ^ named_param_list ^ ") " ^ translated_refined_expr ^ "))")
+							let param_name_list_str = String.concat " " (List.map fst translated_param_list) in
+							let result_str = "(" ^ fn_name ^ " " ^ param_name_list_str ^ ")" in
+							let local_env = LocalEnv.extend name result_str LocalEnv.empty in
+							let translated_expr = check_value Formula None global_fn_env local_env expr in
+							Smt.write
+								("(assert (forall (" ^ translated_param_list_str ^ ") " ^
+									translated_expr ^ "))")
 			end
-		| _ -> error "uninterpreted symbol must be a function"
-	
+		| _ -> error ("uninterpreted symbol " ^ fn_name ^ " must be a function")
 
-(*
-type 'a ty =
-	| TConst of name
-	| TApp of name * 'a ty list
-	| TArrow of ('a refined_ty) list * ('a refined_ty)
-	| TVar of ('a tvar) ref
 
-and 'a refined_ty = 'a ty * (name  * 'a option) option
 
-and t_expr_shape =
-	| EVar of name
-	| EBool of bool
-	| EInt of int
-	| ECall of t_expr * t_expr list
-	| EFun of t_param list * (t_ty * (name * t_expr) option) option * t_expr
-	| ELet of name * t_expr * t_expr
-	| EIf of t_expr * t_expr * t_expr
-	| ECast of t_expr * t_ty * t_expr option
-
-and t_param = name * t_ty * t_expr option
-*)
-
-let ready = ref false
-let startup () =
-	if not !ready then begin
-		ready := true ;
-		Z3.start () ;
+let already_started = ref false
+let start () =
+	if not !already_started then begin
+		already_started := true ;
+		Smt.start () ;
+		Smt.write "(declare-sort Other)" ;
 		StringSet.iter
 			(fun fn_name ->
-				translate_uninterpreted_function fn_name (Env.lookup fn_name Core.env))
-			uninterpreted
+				declare_uninterpreted_function fn_name (Env.lookup fn_name Core.env))
+			uninterpreted ;
+		StringSet.iter
+			(fun name ->
+				let ty = Env.lookup name Core.env in
+				if not (is_function_ty ty) then
+					declare_var name ty)
+			primitives
 	end
 
-let check expr =
-	startup () ;
-	Z3.push_pop (fun () -> ignore (check_expr false None StringMap.empty expr)) ;
+let check_expr expr =
+	start () ;
+	Smt.push_pop
+		(fun () -> begin
+			if is_function_ty expr.ty then
+				ignore (check_function None global_fn_env LocalEnv.empty expr)
+			else
+				ignore (check_value Formula None global_fn_env LocalEnv.empty expr)
+			end)

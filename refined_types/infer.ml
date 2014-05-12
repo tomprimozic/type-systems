@@ -31,6 +31,7 @@ module Env = struct
 	let lookup name env = StringMap.find name env
 
 	let map f env = StringMap.map f env
+	let fold f env init = StringMap.fold f env init
 end
 
 
@@ -162,13 +163,13 @@ let rec infer_expr env level = function
 				shape = ELet(var_name, {shape = value_t_expr.shape; ty = generalized_ty}, body_t_expr);
 				ty = body_t_expr.ty
 			}
-	| SIf(if_s_expr, then_s_expr, else_s_expr) ->
-			let if_t_expr = infer_expr env level if_s_expr in
-			unify if_t_expr.ty t_bool ;
+	| SIf(cond_s_expr, then_s_expr, else_s_expr) ->
+			let cond_t_expr = infer_expr env level cond_s_expr in
+			unify cond_t_expr.ty t_bool ;
 			let then_t_expr = infer_expr env level then_s_expr in
 			let else_t_expr = infer_expr env level else_s_expr in
 			unify then_t_expr.ty else_t_expr.ty ;
-			{shape = EIf(if_t_expr, then_t_expr, else_t_expr); ty = then_t_expr.ty}
+			{shape = EIf(cond_t_expr, then_t_expr, else_t_expr); ty = then_t_expr.ty}
 	| SCast(s_expr, s_ty, maybe_contract_s_expr) ->
 			(* Equivalent to: `(fun (x : ty if contract) -> x)(expr)`. *)
 			let t_expr = infer_expr env level s_expr in

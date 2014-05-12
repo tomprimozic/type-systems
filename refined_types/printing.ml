@@ -119,8 +119,8 @@ and string_of_s_expr expr : string =
 				"fun(" ^ param_list_str ^ ")" ^ return_r_ty_str ^ " -> " ^ complex_expr body_expr
 		| SLet(var_name, value_expr, body_expr) ->
 				"let " ^ var_name ^ " = " ^ complex_expr value_expr ^ " in " ^ complex_expr body_expr
-		| SIf(if_expr, then_expr, else_expr) ->
-				"if " ^ complex_expr if_expr ^
+		| SIf(cond_expr, then_expr, else_expr) ->
+				"if " ^ complex_expr cond_expr ^
 				" then " ^ complex_expr then_expr ^
 				" else " ^ complex_expr else_expr
 		| SCast(expr, ty, None) -> simple_expr expr ^ " : " ^ string_of_s_ty_ann ty
@@ -184,8 +184,8 @@ and string_of_t_expr expr : string =
 				"fun(" ^ param_list_str ^ ")" ^ return_r_ty_str ^ " -> " ^ complex_expr body_expr
 		| ELet(var_name, value_expr, body_expr) ->
 				"let " ^ var_name ^ " = " ^ complex_expr value_expr ^ " in " ^ complex_expr body_expr
-		| EIf(if_expr, then_expr, else_expr) ->
-				"if " ^ complex_expr if_expr ^
+		| EIf(cond_expr, then_expr, else_expr) ->
+				"if " ^ complex_expr cond_expr ^
 				" then " ^ complex_expr then_expr ^
 				" else " ^ complex_expr else_expr
 		| ECast(expr, ty, None) -> simple_expr expr ^ " : " ^ string_of_t_ty_ann ty

@@ -65,6 +65,14 @@ let test_cases = [
 		("fun(a) -> if is_empty(a) then -1 else head(a)", OK);
 		("fun(a : some[b] b if length(a) >= 1) -> head1(a)", OK);
 		("fun(a : some[b] b if my_not(is_empty(a))) -> head(a)", OK);
+
+		(* nil is a primitive constant *)
+		("if nil == nil then 1 else 0", OK);
+
+		(* Z3 cannot prove this *)
+		("fun(x : int if x > 0, y : int if y > 0, z : int if z > 0) -> 1 / (x*x*x + y*y*y - z*z*z)",
+			fail);
+
 		(* Heartbleed *)
 		("fun(payload : array[byte], payload_length : int) : array[byte] -> " ^
 		 " let response = alloc(payload_length) in " ^
@@ -76,6 +84,27 @@ let test_cases = [
 		 " let response = alloc(payload_length) in " ^
 		 " let ignore = memcpy(response, payload, payload_length) in " ^
 		 " response", OK);
+
+
+		(* first class functions *)
+		("let f = succ in 1 : int if f(1) == 2", OK);
+		("let f = fun(x : int if x > 0) : (y : int if y > 0) -> x + 1 in 1 / f(1)", OK);
+		("let f = fun(x : int if x > 0) : (y : int if y > 0) -> x + 1 in 1 / (f(1) - 1)", fail);
+		("let f = fun(x : int if x > 0) : (y : int if y > 0) -> x + 1 in f(0)", fail);
+		("let f = fun(x) : (y : int if y > x) -> x + 1 in 1 / f(0)", OK);
+		("let f = fun(x) : (y : int if y > x) -> x + 1 in 1 / f(-1)", fail);
+		("let a = 2 in let f = fun(x) : (y : int if y > x) -> x + a in 1", OK);
+		("let a = -1 in let f = fun(x) : (y : int if y > x) -> x + a in 1", fail);
+		("1 : int if succ(0) == 1", OK);
+		("1 : int if succ(0) == 2", fail);
+(*
+		("(fun x -> x + 1) : int -> int", OK);
+		("let f = fun x -> x + 1 in f : int -> int", OK);
+		("let f = fun(x : int if x > 0) : (y : int if y == x + 1) -> x + 1 in f : int -> int", OK);
+		("let f = fun(x) : (y : int if y > x) -> x + y in " ^
+		 "f : (x : int if x > 0) -> (y : int if y > 0)", OK);
+		("succ : int -> int if succ(0) == 1");
+*)
 	]
 
 
@@ -97,7 +126,7 @@ let make_single_test_case (code, expected_result) =
 			try
 				let expr = Parser.expr_eof Lexer.token (Lexing.from_string code) in
 				let t_expr = Infer.infer_expr Core.plain_env 0 expr in
-				Refined.check t_expr ;
+				Refined.check_expr t_expr ;
 				OK
 			with Refined.Error msg ->
 				Fail (Some msg)
