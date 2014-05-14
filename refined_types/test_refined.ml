@@ -84,6 +84,13 @@ let test_cases = [
 		("fun(x : int if x > 0, y : int if y > 0, z : int if z > 0) -> 1 / (x*x*x + y*y*y - z*z*z)",
 			fail);
 
+		(* this requires the NLSat solver *)
+		("fun(n : int if n >= 0, m : int if m >= 0, " ^
+		 "    i : int if 0 <= i and i < m, " ^
+		 "    j : int if 0 <= j and j < n, " ^
+		 "    a : array[byte] if length(a) == m * n) -> " ^
+		 " get(a, i * n + j)", OK);
+
 		(* Heartbleed *)
 		("fun(payload : array[byte], payload_length : int) : array[byte] -> " ^
 		 " let response = alloc(payload_length) in " ^

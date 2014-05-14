@@ -84,6 +84,10 @@ let translate_ty ty =
 
 let translate_builtin_and_uninterpreted fn_name translated_arg_list =
 	assert (StringSet.mem fn_name builtins || StringSet.mem fn_name uninterpreted) ;
+	match (fn_name, translated_arg_list) with
+		| ("<", [a; b]) -> "(<= " ^ a ^ " (- " ^ b ^ " 1))"
+		| (">", [a; b]) -> "(>= (- " ^ a ^ " 1) " ^ b ^ ")"
+		| _ ->
 	let args = String.concat " " translated_arg_list in
 	match fn_name with
 		| "unary-" -> "(- " ^ args ^ ")"

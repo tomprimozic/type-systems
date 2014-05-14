@@ -1,7 +1,9 @@
 type answer = Sat | Unsat | Unknown | Error of string
+type solver = Standard | NLSat | Both
 
 
 let log_Z3_input = false
+let solver = Both
 
 let info = ref None
 let log = ref ""
@@ -55,8 +57,20 @@ let write str =
 	log := !log ^ str ^ "\n"
 
 let check_sat () =
-	write "(check-sat)" ;
-	read ()
+	match solver with
+		| Standard ->
+				write "(check-sat)" ;
+				read ()
+		| NLSat ->
+				write "(check-sat-using qfnra-nlsat)" ;
+				read ()
+		| Both ->
+				write "(check-sat)" ;
+				match read () with
+					| Unknown ->
+							write "(check-sat-using qfnra-nlsat)" ;
+							read ()
+					| answer -> answer
 
 let start () =
 	if not (is_started ()) then begin
