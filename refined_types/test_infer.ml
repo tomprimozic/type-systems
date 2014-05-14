@@ -29,7 +29,7 @@ let test_infer = [
 	("let f = fun(x, y) -> let a = x == y in x == y in f", OK "forall[a] (a, a) -> bool");
 	("id(id)", OK "forall[a] a -> a");
 	("choose(fun(x, y) -> x, fun(x, y) -> y)", OK "forall[a] (a, a) -> a");
-	("choose_curry(fun(x, y) -> x)(fun(x, y) -> y)", OK "forall[a] (a, a) -> a");
+	("plain_choose_curry(fun(x, y) -> x)(fun(x, y) -> y)", OK "forall[a] (a, a) -> a");
 	("let x = id in let y = let z = x(id) in z in y", OK "forall[a] a -> a");
 	("cons(id, nil)", OK "forall[a] list[a -> a]");
 	("cons_curry(id)(nil)", OK "forall[a] list[a -> a]");
@@ -60,6 +60,8 @@ let test_infer = [
 	("1 : int if 1 > 0", OK "int");
 	("1 : int if 1 + 0", error "cannot unify types int and bool");
 	("fun(x : some[a] a if x, y : some[a] a) : (z : bool if y) -> x", OK " (bool, bool) -> bool");
+	("fun(a) : (f : int -> int if f(a) == 1) -> fun b -> 1", OK "int -> int -> int");
+	("let const_1 = make_const(1) in const_1", OK "forall[a] a -> int");
 	]
 
 let test_infer_and_syntax = [
@@ -69,6 +71,7 @@ let test_infer_and_syntax = [
 	("fun(x : int) -> x + 1", OK "int -> int");
 	("fun() : ((x : int if x > 0) -> int) -> id", OK "() -> int -> int");
 	("fun() : (x : int if x > 0) -> 1", OK "() -> int");
+	("fun(a : int) : (f : int -> int if f(a) == 1) -> fun(b : int) -> 1", OK "int -> int -> int");
 ]
 
 
@@ -116,7 +119,7 @@ let make_single_test_case check_typed_syntax (code, expected_result) =
 let suite =
 	"test_infer" >:::
 		List.flatten [
-				(*List.map (make_single_test_case false) test_infer;*)
+				List.map (make_single_test_case false) test_infer;
 				List.map (make_single_test_case true) test_infer_and_syntax;
 			]
 

@@ -41,6 +41,7 @@ open Infer
 			("my_not", "(b : bool) -> (c : bool if c == (not b))");
 
 			("make_const", "forall[a b] (x : a) -> b -> (y : a if y == x)");
+			("make_int_const", "(x : int) -> int -> (y : int if y == x)");
 
 			("pair", "forall[t s] (t, s) -> pair[t, s]");
 			("first", "forall[t s] pair[t, s] -> t");

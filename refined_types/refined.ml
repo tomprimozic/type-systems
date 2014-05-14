@@ -151,29 +151,30 @@ let rec check_contract if_clause fn_env local_env contract_expr =
 
 
 and check_function_call if_clause fn_env local_env fn_expr arg_expr_list =
-	let (_, fn_ty) = check_function if_clause fn_env local_env fn_expr in
+	let (call_local_env, fn_ty) = check_function if_clause fn_env local_env fn_expr in
 	let (param_r_ty_list, return_r_ty) = match fn_ty with
 		| TArrow(param_r_ty_list, return_r_ty) -> param_r_ty_list, return_r_ty
 		| _ -> assert false
 	in
-	let rev_translated_arg_expr_list, new_local_env = List.fold_left2
-		(fun (rev_translated_arg_expr_list, local_env) param_r_ty arg_expr ->
-			let (new_local_env, translated_arg_expr) = match param_r_ty with
-				| Plain _ -> (local_env, check_value Formula if_clause fn_env local_env arg_expr)
+	let rev_translated_arg_expr_list, new_call_local_env = List.fold_left2
+		(fun (rev_translated_arg_expr_list, call_local_env) param_r_ty arg_expr ->
+			if is_function_ty (plain_ty param_r_ty) then error "not implemented - argument is a function" else
+			let (new_call_local_env, translated_arg_expr) = match param_r_ty with
+				| Plain _ -> (call_local_env, check_value Formula if_clause fn_env local_env arg_expr)
 				| Named(name, _) ->
 						let translated_arg_expr = check_value Term if_clause fn_env local_env arg_expr in
-						(LocalEnv.extend name translated_arg_expr local_env, translated_arg_expr)
+						(LocalEnv.extend name translated_arg_expr call_local_env, translated_arg_expr)
 				| Refined(name, _, expr) ->
 						let translated_arg_expr = check_value Term if_clause fn_env local_env arg_expr in
-						let new_local_env = LocalEnv.extend name translated_arg_expr local_env in
-						check_contract if_clause fn_env new_local_env expr ;
-						(new_local_env, translated_arg_expr)
+						let new_call_local_env = LocalEnv.extend name translated_arg_expr call_local_env in
+						check_contract if_clause fn_env new_call_local_env expr ;
+						(new_call_local_env, translated_arg_expr)
 			in
-			(translated_arg_expr :: rev_translated_arg_expr_list, new_local_env))
-		([], local_env) param_r_ty_list arg_expr_list
+			(translated_arg_expr :: rev_translated_arg_expr_list, new_call_local_env))
+		([], call_local_env) param_r_ty_list arg_expr_list
 	in
 	let translated_arg_expr_list = List.rev rev_translated_arg_expr_list in
-	(return_r_ty, translated_arg_expr_list, new_local_env)
+	(return_r_ty, translated_arg_expr_list, new_call_local_env)
 
 
 and check_value expected_result if_clause fn_env local_env expr =
@@ -184,7 +185,7 @@ and check_value expected_result if_clause fn_env local_env expr =
 		| EInt i -> translate_int i
 		| ECall({shape = EVar fn_name; ty = _} as fn_expr, arg_expr_list)
 			when (StringSet.mem fn_name builtins) || (StringSet.mem fn_name uninterpreted) -> begin
-				let (return_r_ty, translated_arg_expr_list, new_local_env) =
+				let (return_r_ty, translated_arg_expr_list, call_local_env) =
 					check_function_call if_clause fn_env local_env fn_expr arg_expr_list
 				in
 				let translated_expr = translate_builtin_and_uninterpreted fn_name translated_arg_expr_list in
@@ -196,14 +197,14 @@ and check_value expected_result if_clause fn_env local_env expr =
 							var_name
 			end
 		| ECall(fn_expr, arg_expr_list) -> begin
-				let (return_r_ty, translated_arg_expr_list, new_local_env) =
+				let (return_r_ty, translated_arg_expr_list, call_local_env) =
 					check_function_call if_clause fn_env local_env fn_expr arg_expr_list
 				in
 				match return_r_ty with
 					| Plain return_ty | Named(_, return_ty) -> declare_new_var return_ty
 					| Refined(name, return_ty, expr) ->
 							let var_name = declare_new_var return_ty in
-							let return_ty_local_env = LocalEnv.extend name var_name new_local_env in
+							let return_ty_local_env = LocalEnv.extend name var_name call_local_env in
 							let translated_expr = check_value Formula if_clause fn_env return_ty_local_env expr in
 							assert_true translated_expr ;
 							var_name
@@ -215,8 +216,8 @@ and check_value expected_result if_clause fn_env local_env expr =
 				assert_eq var_name translated_value_expr ;
 				check_value expected_result if_clause fn_env local_env body_expr
 		| ELet(fn_name, fn_expr, body_expr) (* when is_function_ty fn_expr.ty *) ->
-				let fn_local_env_ty = check_function if_clause fn_env local_env fn_expr in
-				let new_fn_env = FnEnv.extend fn_name fn_local_env_ty fn_env in
+				let local_env_and_ty = check_function if_clause fn_env local_env fn_expr in
+				let new_fn_env = FnEnv.extend fn_name local_env_and_ty fn_env in
 				check_value expected_result if_clause new_fn_env local_env body_expr
 		| EIf(cond_expr, then_expr, else_expr) -> begin
 				let translated_cond_expr = check_value Term if_clause fn_env local_env cond_expr in
@@ -255,7 +256,18 @@ and check_function if_clause fn_env local_env expr =
 				(*assert (not ((StringSet.mem name builtins) || (StringSet.mem name uninterpreted))) ;*)
 				FnEnv.lookup name fn_env
 		| EBool _ | EInt _ -> assert false
-		| ECall _ -> error "not implemented - check_function - ECall"
+		| ECall(fn_expr, arg_expr_list) ->
+				let (return_r_ty, translated_arg_expr_list, call_local_env) =
+					check_function_call if_clause fn_env local_env fn_expr arg_expr_list
+				in
+				let return_ty = match return_r_ty with
+					| Plain return_ty | Named(_, return_ty) -> return_ty
+					| Refined _ -> error "cannot use refined type on an output function"
+				in
+				assert (is_function_ty return_ty) ;
+				(call_local_env, return_ty)
+		| EFun(param_list, maybe_return_r_ty, body_expr) when is_function_ty body_expr.ty ->
+				error "not implemented - check_function - function returning a function"
 		| EFun(param_list, maybe_return_r_ty, body_expr) ->
 				Smt.push_pop (fun () ->
 					let param_r_ty_list = List.map
@@ -280,11 +292,15 @@ and check_function if_clause fn_env local_env expr =
 								Plain body_expr.ty
 					in
 					(LocalEnv.empty, TArrow(param_r_ty_list, return_r_ty)))
-(*		| EFun _ -> begin
-				ignore (check_value2 Formula if_clause fn_env local_env expr) ;
-				(LocalEnv.empty, Infer.new_var 0)
-			end *)
-		| ELet _ -> error "not implemented - check_function - ELet"
+		| ELet(var_name, value_expr, body_expr) when not (is_function_ty value_expr.ty) ->
+				let translated_value_expr = check_value Formula if_clause fn_env local_env value_expr in
+				declare_var var_name value_expr.ty ;
+				assert_eq var_name translated_value_expr ;
+				check_function if_clause fn_env local_env body_expr
+		| ELet(fn_name, fn_expr, body_expr) (* when is_function_ty fn_expr.ty *) ->
+				let local_env_and_ty = check_function if_clause fn_env local_env fn_expr in
+				let new_fn_env = FnEnv.extend fn_name local_env_and_ty fn_env in
+				check_function if_clause new_fn_env local_env body_expr
 		| EIf _ -> error "cannot use an if statement to select a function"
 		| ECast _ -> error "not implemented - check_function - ECast"
 
@@ -366,7 +382,8 @@ let start () =
 				let ty = Env.lookup name Core.env in
 				if not (is_function_ty ty) then
 					declare_var name ty)
-			primitives
+			primitives ;
+		Smt.write "; End of global declarations.\n"
 	end
 
 let check_expr expr =
