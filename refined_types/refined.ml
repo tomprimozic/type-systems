@@ -192,7 +192,7 @@ and check_value expected_result if_clause fn_env local_env expr =
 				match expected_result with
 					| Formula -> translated_expr
 					| Term ->
-							let var_name = declare_new_var (plain_ty return_r_ty) in
+							let var_name = declare_new_var expr.ty in
 							assert_eq var_name translated_expr ;
 							var_name
 			end
@@ -201,11 +201,13 @@ and check_value expected_result if_clause fn_env local_env expr =
 					check_function_call if_clause fn_env local_env fn_expr arg_expr_list
 				in
 				match return_r_ty with
-					| Plain return_ty | Named(_, return_ty) -> declare_new_var return_ty
-					| Refined(name, return_ty, expr) ->
-							let var_name = declare_new_var return_ty in
+					| Plain _ | Named _ -> declare_new_var expr.ty
+					| Refined(name, _, contract_expr) ->
+							let var_name = declare_new_var expr.ty in
 							let return_ty_local_env = LocalEnv.extend name var_name call_local_env in
-							let translated_expr = check_value Formula if_clause fn_env return_ty_local_env expr in
+							let translated_expr =
+								check_value Formula if_clause fn_env return_ty_local_env contract_expr
+							in
 							assert_true translated_expr ;
 							var_name
 			end

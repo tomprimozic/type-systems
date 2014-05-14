@@ -66,6 +66,16 @@ let test_cases = [
 		("fun(a) -> if is_empty(a) then -1 else head(a)", OK);
 		("fun(a : some[b] b if length(a) >= 1) -> head1(a)", OK);
 		("fun(a : some[b] b if my_not(is_empty(a))) -> head(a)", OK);
+		("1 : int if choose(1, 1) == 1", OK);
+		("let a = plain_choose(1, 1) in a == 1", OK);
+		("let f = choose_curry(2) in " ^
+		 "let a = f(3) + f(5) in " ^
+		 "if not ((a == 4 or a == 5) or (a == 7 or a == 8)) " ^
+		 "then 1 / 0 else 1", OK);
+		("let f = choose_curry(2) in " ^
+		 "let a = f(3) + f(5) in " ^
+		 "if not ((a == 3 or a == 5) or (a == 7 or a == 8)) " ^
+		 "then 1 / 0 else 1", fail);
 
 		(* nil is a primitive constant *)
 		("if nil == nil then 1 else 0", OK);
@@ -111,11 +121,12 @@ let test_cases = [
 		 "in 1 : int if max(-7, 3) == 3 and max(15, 3) != 3", OK);
 		("fun x -> if x > 0 then let f = fun y -> y / x in f(2) else 2", OK);
 		("fun x -> if x >= 0 then let f = fun y -> y / x in f(2) else 2", fail);
-		("let const_1 = make_int_const(1) in fun a -> 1 : int if const_1(a) == 1", OK);
-		("let const_1 = make_int_const(1) in fun x -> 1 : int if const_1(x) == 1", OK);
-		("let const_1 = make_int_const(1) in fun x -> 1 : int if const_1(x) == 2", fail);
+		("let const_1 = make_const(1) in fun a -> 1 : int if const_1(a) == 1", OK);
+		("let const_1 = make_const(1) in fun x -> 1 : int if const_1(x) == 1", OK);
+		("let const_1 = make_const(1) in fun x -> 1 : int if const_1(x) == 2", fail);
+		("let const_7 = make_const(7) in fun(x, y) -> 1 : int if const_7(x) == const_7(y)", OK);
 		("let test = fun(x : int, y : int if y == x - 1) -> 1 in " ^
-		 "let const_2 = make_int_const(2) in " ^
+		 "let const_2 = make_const(2) in " ^
 		 "let a = 3 in " ^
 		 "test(a, const_2(a))", OK);
 		("let f = fun(z, y : int if y == z + 1) -> 1 in let x = 2 in f(1, x)", OK);
