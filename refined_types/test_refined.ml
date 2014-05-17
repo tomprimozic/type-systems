@@ -138,13 +138,22 @@ let test_cases = [
 		 "test(a, const_2(a))", OK);
 		("let f = fun(z, y : int if y == z + 1) -> 1 in let x = 2 in f(1, x)", OK);
 		("let f = fun(x, y : int if y == x + 1) -> 1 in let x = 2 in f(1, x)", OK);
-(*
+		("let test = fun(i : int if i > -6) : (j : int if j >= i * 3) -> i * 3 + 1 in " ^
+		 "test : (x : int if x > 0) -> (y : int if y > x)", OK);
+		("let test = fun(i : int if i > 1) : (j : int if j >= i * 3) -> i * 3 + 1 in " ^
+		 "test : (x : int if x > 0) -> (y : int if y > x)", fail);
+		("let test = fun(i : int if i > -6) : (j : int if j >= i * 3) -> i * 3 + 1 in " ^
+		 "test : (x : int if x >= -1) -> (y : int if y > x)", fail);
+
+		(* function subtyping *)
 		("(fun x -> x + 1) : int -> int", OK);
 		("let f = fun x -> x + 1 in f : int -> int", OK);
-		("let f = fun(x : int if x > 0) : (y : int if y == x + 1) -> x + 1 in f : int -> int", OK);
-		("let f = fun(x) : (y : int if y > x) -> x + y in " ^
+		("let f = fun(x : int if x > 0) : (y : int if y == x + 1) -> x + 1 in " ^
+		 "f : (x : int if x > 0) -> int", OK);
+		("succ : int -> int if succ(0) == 1", OK);
+(*
+		("let f = fun(x) : (y : int if y > x) : (z : int if z == x + y) -> x + y in " ^
 		 "f : (x : int if x > 0) -> (y : int if y > 0)", OK);
-		("succ : int -> int if succ(0) == 1");
 *)
 	]
 

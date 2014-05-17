@@ -5,8 +5,6 @@ open Smt
 module StringSet = Set.Make(String)
 module StringMap = Map.Make(String)
 
-module Env = Infer.Env
-
 
 exception Error of string
 let error msg = raise (Error msg)
@@ -35,11 +33,7 @@ module FnEnv = struct
 		if StringMap.mem name env then error ("duplicate variable name \"" ^ name ^ "\"") else
 		StringMap.add name var_env_and_ty env
 	let lookup name env = StringMap.find name env
-
-	let map f env = StringMap.map f env
 end
-
-
 
 
 
@@ -47,7 +41,7 @@ end
 let builtins =
 	List.fold_left
 		(fun names (name, ty_str) ->
-			if not (is_function_ty (Env.lookup name Core.env)) then
+			if not (is_function_ty (Infer.Env.lookup name Core.env)) then
 				error ("builtin symbol " ^ name ^ " must be a function")
 			else
 				StringSet.add name names)
@@ -56,7 +50,7 @@ let builtins =
 let uninterpreted =
 	List.fold_left
 		(fun names (name, ty_str) ->
-			if not (is_function_ty (Env.lookup name Core.env)) then
+			if not (is_function_ty (Infer.Env.lookup name Core.env)) then
 				error ("uninterpreted symbol " ^ name ^ " must be a function")
 			else
 				StringSet.add name names)
@@ -151,6 +145,56 @@ let rec check_contract if_clause fn_env var_env contract_expr =
 				| Unknown -> error ("Smt returned unknown.")
 				| Error message -> error ("Smt returned " ^ message ^ "."))
 
+
+and check_function_subtype if_clause fn_env var_env fn_expr expected_fn_ty =
+	let (closure_var_env, fn_ty) = check_function if_clause fn_env var_env fn_expr in
+	let (param_r_ty_list, return_r_ty) = match fn_ty with
+		| TArrow(param_r_ty_list, return_r_ty) -> param_r_ty_list, return_r_ty
+		| _ -> assert false
+	in
+	let (expected_param_r_ty_list, expected_return_r_ty) = match expected_fn_ty with
+		| TArrow(expected_param_r_ty_list, expected_return_r_ty) ->
+				expected_param_r_ty_list, expected_return_r_ty
+		| _ -> assert false
+	in
+	Smt.push_pop (fun () ->
+		let (new_closure_var_env, new_var_env) = List.fold_left2
+			(fun (closure_var_env, var_env) param_r_ty expected_param_r_ty ->
+				let (var_name, new_var_env) = match expected_param_r_ty with
+					| Plain ty -> (declare_new_var ty, var_env)
+					| Named(name, ty) ->
+							let var_name = declare_new_var ty in
+							(var_name, VarEnv.extend name var_name var_env)
+					| Refined(name, ty, expr) ->
+							let var_name = declare_new_var ty in
+							let new_var_env = VarEnv.extend name var_name var_env in
+							assert_true (check_value Formula if_clause fn_env new_var_env expr) ;
+							(var_name, new_var_env)
+				in
+				let new_closure_var_env = match param_r_ty with
+					| Plain _ -> closure_var_env
+					| Named(name, _) -> VarEnv.extend name var_name closure_var_env
+					| Refined(name, _, expr) ->
+							let new_closure_var_env = VarEnv.extend name var_name closure_var_env in
+							check_contract if_clause fn_env new_closure_var_env expr ;
+							new_closure_var_env
+				in
+				(new_closure_var_env, new_var_env))
+			(closure_var_env, var_env) param_r_ty_list expected_param_r_ty_list
+		in
+		let return_var_name = declare_new_var (plain_ty expected_return_r_ty) in
+		begin match return_r_ty with
+			| Plain _ | Named _ -> ()
+			| Refined(name, _, expr) ->
+					let closure_return_ty_var_env = VarEnv.extend name return_var_name new_closure_var_env in
+					assert_true (check_value Formula if_clause fn_env closure_return_ty_var_env expr)
+		end ;
+		begin match expected_return_r_ty with
+			| Plain _ | Named _ -> ()
+			| Refined(name, _, expr) ->
+					let return_ty_var_env = VarEnv.extend name return_var_name new_var_env in
+					check_contract if_clause fn_env return_ty_var_env expr
+		end)
 
 
 
@@ -308,12 +352,14 @@ and check_function if_clause fn_env var_env expr =
 				let new_fn_env = FnEnv.extend fn_name var_env_and_ty fn_env in
 				check_function if_clause new_fn_env var_env body_expr
 		| EIf _ -> error "cannot use an if statement to select a function"
-		| ECast _ -> error "not implemented - check_function - ECast"
+		| ECast(expr, ty, maybe_contract_expr) ->
+				check_function_subtype if_clause fn_env var_env expr ty ;
+				(VarEnv.empty, ty)
 
 
 
 let global_fn_env =
-	Env.fold
+	Infer.Env.fold
 		(fun fn_name fn_ty fn_env ->
 			if not (is_function_ty fn_ty) then
 				fn_env
@@ -381,11 +427,11 @@ let start () =
 		Smt.write "(declare-sort Other)" ;
 		StringSet.iter
 			(fun fn_name ->
-				declare_uninterpreted_function fn_name (Env.lookup fn_name Core.env))
+				declare_uninterpreted_function fn_name (Infer.Env.lookup fn_name Core.env))
 			uninterpreted ;
 		StringSet.iter
 			(fun name ->
-				let ty = Env.lookup name Core.env in
+				let ty = Infer.Env.lookup name Core.env in
 				if not (is_function_ty ty) then
 					declare_var name ty)
 			primitives ;
