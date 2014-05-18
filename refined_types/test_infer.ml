@@ -62,6 +62,8 @@ let test_infer = [
 	("fun(x : some[a] a if x, y : some[a] a) : (z : bool if y) -> x", OK " (bool, bool) -> bool");
 	("fun(a) : (f : int -> int if f(a) == 1) -> fun b -> 1", OK "int -> int -> int");
 	("let const_1 = make_const(1) in const_1", OK "forall[a] a -> int");
+	(* This one ideally shouldn't fail, but this system doesn't permit duplicate variables. *)
+	("let x = 0 in fac : (x : int if x >= 0) -> int", fail);
 	]
 
 let test_infer_and_syntax = [

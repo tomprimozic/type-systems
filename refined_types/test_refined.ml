@@ -151,6 +151,33 @@ let test_cases = [
 		("let f = fun(x : int if x > 0) : (y : int if y == x + 1) -> x + 1 in " ^
 		 "f : (x : int if x > 0) -> int", OK);
 		("succ : int -> int if succ(0) == 1", OK);
+		("succ : (x : int if x > 0) -> (y : int if y > 0)", OK);
+		("succ : (x : int if x > 0) -> (y : int if y > 1)", OK);
+		("succ : (x : int if x > 0) -> (y : int if y > 2)", fail);
+		("let a = 1 in succ : (x : int if x > 0) -> (y : int if y > a)", OK);
+		("let a = 2 in succ : (x : int if x > 0) -> (y : int if y > a)", fail);
+		("let a = 0 in fac : (x : int if x >= a) -> int", OK);
+		("let a = -1 in fac : (x : int if x >= a) -> int", fail);
+		("fac : (a : int if a >= 0) -> int", OK);
+		("fac : (a : int if a >= 0) -> (z : int if z > -1)", OK);
+		("let f = fac : (x : int if x > 0) -> (z : int if z > 0) in 1 / f(100)", OK);
+		("let f = fac : (x : int if x > 0) -> (z : int if z > -2) in 1 / f(100)", fail);
+		("fac(0)", OK);
+		("fac(-1)", fail);
+		("let f = fac in f(0)", OK);
+		("let f = fac in f(-1)", fail);
+		("let f = fac : (a : int if a > 0) -> int in f(1)", OK);
+		("let f = fac : (a : int if a > 0) -> int in f(0)", fail);
+		("fun x -> " ^
+		 "if x >= 0 then " ^
+		 " let f = fac : (a : int if a >= x) -> int in " ^
+		 " f(x + 1) " ^
+		 "else " ^
+		 " let f = fac : (a : int if a >= 0) -> (z : int if z > x) in " ^
+		 " f(-x)", OK);
+		("make_const(1) : int -> (x : int if x >= 0)", OK);
+		("make_const(-1) : int -> (x : int if x >= 0)", fail);
+		("make_const(1) : int -> (x : int if x >= 2)", fail);
 (*
 		("let f = fun(x) : (y : int if y > x) : (z : int if z == x + y) -> x + y in " ^
 		 "f : (x : int if x > 0) -> (y : int if y > 0)", OK);
