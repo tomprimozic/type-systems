@@ -18,6 +18,7 @@ open Infer
 			("-", "(int, int) -> int");
 			("*", "(int, int) -> int");
 			("/", "(int, i : int if i != 0) -> int");
+			("%", "(int, i : int if i != 0) -> int");
 			("unary-", "int -> int");
 		]
 

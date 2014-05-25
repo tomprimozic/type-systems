@@ -22,6 +22,8 @@ let test_cases = [
 		("let x = 1 in 1 : int if x + 3 > 2", OK);
 		("1 / 0", wrong);
 		("let x = 0 in 1 / x", wrong);
+		("1 / (4 % 2)", wrong);
+		("1 / (4 % 3)", OK);
 		("1 / 1", OK);
 		("let x = 1 in 1 / x", OK);
 		("1 / succ(0)", OK);
