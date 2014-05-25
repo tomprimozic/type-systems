@@ -355,7 +355,11 @@ and check_function if_clause fn_env local_env expr =
 				let new_fn_env = FnEnv.extend fn_name local_env_and_ty fn_env in
 				check_function if_clause new_fn_env local_env body_expr
 		| EIf _ -> error "cannot use an if statement to select a function"
-		| ECast(expr, ty, maybe_contract_expr) ->
+		| ECast(expr, ty, Some contract_expr) ->
+				check_function_subtype if_clause fn_env local_env expr ty ;
+				check_contract if_clause fn_env local_env contract_expr ;
+				(LocalEnv.empty, ty)
+		| ECast(expr, ty, None) ->
 				check_function_subtype if_clause fn_env local_env expr ty ;
 				(LocalEnv.empty, ty)
 

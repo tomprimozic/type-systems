@@ -108,9 +108,9 @@ let test_cases = [
 		 " let ignore = memcpy(response, payload, payload_length) in " ^
 		 " response", OK);
 
-
 		(* first class functions *)
 		("let f = succ in 1 : int if f(1) == 2", OK);
+		("let f = succ in 1 : int if f(1) == 3", wrong);
 		("let f = fun(x : int if x > 0) : (y : int if y > 0) -> x + 1 in 1 / f(1)", OK);
 		("let f = fun(x : int if x > 0) : (y : int if y > 0) -> x + 1 in 1 / (f(1) - 1)", wrong);
 		("let f = fun(x : int if x > 0) : (y : int if y > 0) -> x + 1 in f(0)", wrong);
@@ -183,6 +183,11 @@ let test_cases = [
 		("make_const(1) : int -> (x : int if x >= 0)", OK);
 		("make_const(-1) : int -> (x : int if x >= 0)", wrong);
 		("make_const(1) : int -> (x : int if x >= 2)", wrong);
+		("succ : int -> int if succ(0) == 1", OK);
+		("succ : int -> int if succ(0) == 2", wrong);
+		("succ : (x : int if x > 0) -> (y : int if y > 1) if succ(0) == 1", OK);
+		("succ : (x : int if x > 0) -> (y : int if y > 1) if succ(0) == 2", wrong);
+		("succ : (x : int if x > 0) -> (y : int if y > 2) if succ(0) == 1", wrong);
 (*
 		("let f = fun(x) : (y : int if y > x) : (z : int if z == x + y) -> x + y in " ^
 		 "f : (x : int if x > 0) -> (y : int if y > 0)", OK);
