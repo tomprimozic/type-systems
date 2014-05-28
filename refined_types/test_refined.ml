@@ -42,7 +42,7 @@ let test_cases = [
 		 "   m - x " ^
 		 " in " ^
 		 " 1 / z", OK);
-		("let x = random1toN(100) in let y = random1toN(100) in " ^
+		("let x = random1toN(100) - 10 in let y = random1toN(100) - 50 in " ^
 		 "if x > 0 then " ^
 		 " if y > 0 then " ^
 		 "  1 / x + 1 / y " ^
@@ -52,6 +52,9 @@ let test_cases = [
 		 " x + y", OK);
 		("fun (x : int) -> 1 / x", wrong);
 		("fun (x : int if x > 0) -> 1 / x", OK);
+		("fun (x : int if x > 2) -> x : int if x > 0", OK);
+		("fun (x : int if x > 0) -> x : int if x > 4", wrong);
+		("fun (x : int if x > 3) : (z : int if z > 0) -> x - 2", OK);
 		("fun (x : int, y : int) : (z : int if z >= x and z >= y) -> if x <= y then x else y", wrong);
 		("fun (x : int, y : int) : (z : int if z >= x and z >= y) -> if x >= y then x else y", OK);
 		("let a = alloc(5) in 1 / (length(a) - 5)", wrong);
@@ -120,11 +123,24 @@ let test_cases = [
 		("let a = -1 in fun(x) : (y : int if y > x) -> x + a", wrong);
 		("1 : int if succ(0) == 1", OK);
 		("1 : int if succ(0) == 2", wrong);
+		("let min = fun(x, y) : (z : int if z == (if x > y then y else x)) -> " ^
+		 " if x > y then y else x " ^
+		 "in " ^
+		 "let abs= fun(i) : (n : int if (if i > 0 then n == i else n == -i)) -> -min(-i, i) in " ^
+		 "abs(-3)", OK);
 		("let max = fun(x, y) : (z : int if (if x > y then z == x else z == y)) -> " ^
 		 " if x > y then x else y " ^
 		 "in " ^
 		 "let abs = fun(x) : (z : int if z == (if x >= 0 then x else -x)) -> max(x, -x) in " ^
-		 "abs(-3)", OK);
+		 "fun (x : int if abs(x) <= 10) -> " ^
+		 " let z = if max(square(x), 25) == 25 then " ^
+		 "   3 * x + 7 * random1toN(10) " ^
+		 "  else if x == 11 then " ^
+		 "   0 " ^
+		 "  else " ^
+		 "   x " ^
+		 " in " ^
+		 " 100 / z", OK);
 		("let max = fun(x, y) : (z : int if (if x > y then z == x else z == y)) -> " ^
 		 " if x < y then x else y " ^
 		 "in max", wrong);
@@ -183,15 +199,17 @@ let test_cases = [
 		("make_const(1) : int -> (x : int if x >= 0)", OK);
 		("make_const(-1) : int -> (x : int if x >= 0)", wrong);
 		("make_const(1) : int -> (x : int if x >= 2)", wrong);
+		("make_const(1) : int -> (x : int if x == 1)", OK);
+		("make_const(1) : int -> (x : int if x == 0)", wrong);
+		("let min = fun(x, y) : (z : int if z == (if x > y then y else x)) -> " ^
+		 " if x > y then y else x " ^
+		 "in " ^
+		 "min : (i : int if i > 0, j : int if j < 0) -> (k : int if k < 0)", OK);
 		("succ : int -> int if succ(0) == 1", OK);
 		("succ : int -> int if succ(0) == 2", wrong);
 		("succ : (x : int if x > 0) -> (y : int if y > 1) if succ(0) == 1", OK);
 		("succ : (x : int if x > 0) -> (y : int if y > 1) if succ(0) == 2", wrong);
 		("succ : (x : int if x > 0) -> (y : int if y > 2) if succ(0) == 1", wrong);
-(*
-		("let f = fun(x) : (y : int if y > x) : (z : int if z == x + y) -> x + y in " ^
-		 "f : (x : int if x > 0) -> (y : int if y > 0)", OK);
-*)
 	]
 
 

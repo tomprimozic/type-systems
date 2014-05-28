@@ -203,6 +203,10 @@ raise an error. However, it remains unclear if this idea can be extended to poly
 container types, i.e. how to safely implement casts such as `f : forall[a] a -> list[a]`.
 
 
+
+References
+----------
+
 [1] S Thatte. *Quasi-static typing.* 1989
 
 [2] T Lindahl, K Sagonas. *[Practical Type Inference Based on Success Typings](http://www.it.uu.se/research/group/hipe/papers/succ_types.pdf).* 2006

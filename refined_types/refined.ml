@@ -17,7 +17,9 @@ module LocalEnv = struct
 	type env = string StringMap.t
 
 	let empty : env = StringMap.empty
-	let extend name ty env = StringMap.add name ty env
+	let extend name ty env =
+		if StringMap.mem name env then error ("duplicate variable name \"" ^ name ^ "\"") else
+		StringMap.add name ty env
 	let lookup name env =
 		try
 			StringMap.find name env

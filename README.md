@@ -34,6 +34,12 @@ are minimal and contain code that is (hopefully) simple and clear.
     allowing programmers to make dynamic programs safer by adding static type information, and
     make static programs more flexible by delaying type-checking until runtime when necessary.
 
+-   [**refined_types**](https://github.com/tomprimozic/type-systems/tree/master/refined_types)
+    is an experiment that extends the HM type system with dependent types in the form of function
+    contracts. It uses an external automatic theorem prover to verify that function contracts are
+    satisfied, and can prevent be used to prevent many of the most common software errors, such
+    as division by zero and out-of-bounds array access.
+
 
 
 [extensible_rows]: http://research.microsoft.com/apps/pubs/default.aspx?id=65409
