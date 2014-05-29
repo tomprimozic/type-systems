@@ -7,11 +7,11 @@ refined types on function parameters and return types (i.e. *function contracts*
 absence of some of the most common software bugs.
 
 For a simple example, let's consider integer division: we know that the denominator cannot be zero.
-Thus, if we define division as `/ : (int, i : int if i != 0) ⟶ int`, the refined type-checker can
+Thus, if we define division as `/ : (int, i : int if i != 0) → int`, the refined type-checker can
 tell us *during compilation* that `1/0` will result in an error, as would `1/(2 * 3 - 6)` and
 `1/(4 % 2)`. The system can also deduce that the program `10 / (random1toN(10) - 5)` is potentially
 unsafe, where `random1toN` is a non-deterministic function whose type is
-`(N : int if N ≥ 1) ⟶ (i : int if 1 ≤ i and i ≤ N)`.
+`(N : int if N ≥ 1) → (i : int if 1 ≤ i and i ≤ N)`.
 
 Refined type checking can also be used to verify that arrays are not accessed out of bounds, and
 using appropriate contracts on functions `alloc` and `memcpy`, software bugs such as
@@ -57,7 +57,7 @@ static type systems, yet despite intensive research they remain complex and impr
 used in research languages and mathematical proof assistants. *Refined types* or *contracts* are a
 restricted form of dependent types that combine base datatypes with logical predicates; for example,
 the type of natural numbers could be written `x : int if x ≥ 0` (the notation most commonly used in
-academic literature is `{ 𝜈 : int | 𝜈 ≥ 0}`).
+academic literature is `{ν : int | ν ≥ 0}`).
 
 Refined types have been a topic of a lot of research and experimentation in the past decade. *Hybrid
 type checking* [1] combines static and dynamic type-checking by verifying the contracts statically
@@ -223,7 +223,7 @@ where each argument expression is translated and the contract on the correspondi
 checked. As contracts on function parameters can refer to earlier parameters, the representations of
 argument expressions corresponding to named parameters are added to the function's *local
 environment*. In the example above, the local environment when checking the refined return type is
-`{z ⇒ "(- x 2)"}`, so that the variable `z` in the contract expression is translated correctly.
+`{z ↦ "(- x 2)"}`, so that the variable `z` in the contract expression is translated correctly.
 
 The results of some function calls are represented directly, specifically the results of calls of
 built-in operators, which have standard interpretations in SMT theories, and *uninterpreted
@@ -241,19 +241,19 @@ result of the call `random1toN(10)` is translated as
 In contrast to other values, functions are not translated into SMT-LIB representation, but are
 instead stored in a *function environment*. If a function is the result of an application of a
 higher-order function, its local environment is stored along with its refined type.
-Take, for example, the function `make_const : (x : int) ⟶ int ⟶ (z : int if z == x)`. The result
-of the call `make_const(1 + 2)` is the pair `({x ⇒ "(+ 1 2)"}, int ⟶ (z : int if z == x))`. That
+Take, for example, the function `make_const : (x : int) → int → (z : int if z == x)`. The result
+of the call `make_const(1 + 2)` is the pair `({x ↦ "(+ 1 2)"}, int → (z : int if z == x))`. That
 way, when the resulting function is called, its return type contract can be translated correctly.
 
 Function casts must establish a subtype relationship between two refined function types, e.g. that
-`a₁ ⟶ b₁ <: a₂ ⟶ b₂`. Assuming that the base types of `a₁` and `a₂` and of `b₁` and `b₂` are equal,
+`a₁ → b₁ <: a₂ → b₂`. Assuming that the base types of `a₁` and `a₂` and of `b₁` and `b₂` are equal,
 we must prove that the contract of `a₂` implies the contract of `a₁` (as parameter types are
 contravariant), and that the contract of `a₂` and the contract of `b₁` imply the contract of `b₂`
 (since return types are covariant).  If there are multiple parameters, the contracts of all earlier
 parameters of the supertype must be used as premises when checking the implication of contracts for
 each parameter and for the return type. For example, to prove that the type
-`(x : int, y : int if y > 0) ⟶ (z : int if z == x + y)` is a subtype of
-`(x : int if x > 0, y : int if y > x) ⟶ (z : int if z > 0)`, we must prove 1)
+`(x : int, y : int if y > 0) → (z : int if z == x + y)` is a subtype of
+`(x : int if x > 0, y : int if y > x) → (z : int if z > 0)`, we must prove 1)
 `x > 0 ⇒ true`, 2) `x > 0 ∧ y > x ⇒ y > 0`, and 3) `x > 0 ∧ y > x ∧ z == x + y ⇒ z > 0`.
 
 
@@ -274,12 +274,12 @@ satisfiable to extract a set of values that break the contract.
 
 Handling of first-class functions needs to be improved. We would need to include functions in local
 environment as well, and then use the function subtype-checking algorithm to check refined function
-types of parameters and return types. We would need to transform some second-order contracts into equivalent refined function types, for example `f : int ⟶ int if f(0) == 1` is equivalent to
-`f : (x : int) ⟶ (y : int if (if x == 0 then y == 1 else true))`, while
-`f : array[int] ⟶ int if f == length` is equivalent to
-`f : (a : array[int]) ⟶ (i : int if i == length(a))`. Finally, it would be useful to alert the user
+types of parameters and return types. We would need to transform some second-order contracts into equivalent refined function types, for example `f : int → int if f(0) == 1` is equivalent to
+`f : (x : int) → (y : int if (if x == 0 then y == 1 else true))`, while
+`f : array[int] → int if f == length` is equivalent to
+`f : (a : array[int]) → (i : int if i == length(a))`. Finally, it would be useful to alert the user
 when there can be no functions inhabiting a given function type, such as
-`(x : int if x > 0) ⟶ (y : int if y > x and y < 0)`.
+`(x : int if x > 0) → (y : int if y > x and y < 0)`.
 
 More substantial extensions would be adding a function effect system, which would prohibit the use
 of functions with side-effects (such as non-determinism or I/O) in refined types, and including
@@ -289,10 +289,10 @@ to support imperative features such as loops and mutable local variables and dat
 
 A very useful extension would be to allow refined types within algebraic datatypes, for example
 `array[i : int if i ≥ 0]`. This would require the ability to instantiate polymorphic types with
-refined base types, so that we could use `get : forall[a] (array[a], i : int) ⟶ a` to extract a
+refined base types, so that we could use `get : forall[a] (array[a], i : int) → a` to extract a
 non-negative value from this array. A related idea is *predicate polymorphism* [6]: we want to
 support types such as
-`array_max : forall[p : int ⟶ bool] array[i : int if p(i)] ⟶ (k : int if p(k)`.
+`array_max : forall[p : int → bool] array[i : int if p(i)] → (k : int if p(k))`.
 
 Ideally, refined type-checking could be used without having the programmer explicitly annotate all
 parameters and return types. However, refined type inference is complicated, as it is hard to say
