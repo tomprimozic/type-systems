@@ -1,7 +1,7 @@
 Refined types: a better type system for more secure software
 ============================================================
 
-This is another type systems experiment that combines HM type inference with static type-checking of
+This is another type systems experiment that combines Hindley–Milner type inference with static type-checking of
 a limited version of dependent types called *refined types*. Although the type-checker only allows
 refined types on function parameters and return types (i.e. *function contracts*), it can prove the
 absence of some of the most common software bugs.
@@ -45,7 +45,7 @@ values, are explained below.
 
 
 > *Note about syntax:* These examples use a syntax similar to JavaScript or TypeScript that
-> should be familiar to most programmers, which is different from the ML-like syntax that the
+> should be familiar to most programmers, which is different from the [ML][ml-language]-like syntax that the
 > type-checker and its test cases use.
 
 
@@ -325,6 +325,7 @@ References
 
 [heartbleed]: http://en.wikipedia.org/wiki/Heartbleed "Heartbleed"
 [z3]: http://z3.codeplex.com/ "Z3, a high-performance theorem prover"
+[ml-language]: http://en.wikipedia.org/wiki/ML_(programming_language) "ML programming language"
 [f7]: http://research.microsoft.com/en-us/projects/f7/ "F7: Refinement Types for F#"
 [f-star]: http://research.microsoft.com/en-us/projects/fstar/ "F*"
 [vcc]: http://research.microsoft.com/en-us/projects/vcc/ "VCC: A Verifier for Concurrent C"
