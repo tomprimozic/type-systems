@@ -20,6 +20,7 @@ let core =
 	assume "map_curry" "forall[a b] (a -> b) -> list[a] -> list[b]" ;
 	assume "one" "int" ;
 	assume "zero" "int" ;
+	assume "half" "float" ;
 	assume "succ" "int -> int" ;
 	assume "plus" "(int, int) -> inc" ;
 	assume "eq" "forall[a] (a, a) -> bool" ;

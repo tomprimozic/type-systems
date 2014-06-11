@@ -4,10 +4,10 @@ open Expr
 open Infer
 
 
-let expr_record_extend (label_expr_list : (name * expr) list) rest_expr =
+let expr_record_extend label_expr_list rest_expr =
 	let label_expr_map =
-		List.fold_right
-			(fun ((label, expr) : string * expr) (label_expr_map : expr list LabelMap.t) ->
+		List.fold_left
+			(fun label_expr_map (label, expr) ->
 				let expr_list =
 					try
 						expr :: (LabelMap.find label label_expr_map)
@@ -15,7 +15,7 @@ let expr_record_extend (label_expr_list : (name * expr) list) rest_expr =
 						[expr]
 				in
 				LabelMap.add label expr_list label_expr_map)
-			label_expr_list LabelMap.empty
+			LabelMap.empty label_expr_list
 	in
 	RecordExtend(label_expr_map, rest_expr)
 
@@ -126,7 +126,7 @@ simple_ty:
 	| LBRACE RBRACE                                 { TRecord TRowEmpty }
 	| LBRACE IDENT RBRACE                           { TRecord (TConst $2) }
 	| LBRACE ty_row PIPE ty RBRACE                  { TRecord (ty_row_extend $2 $4) }
-	| LBRACE ty_row RBRACE	                        { TRecord (ty_row_extend $2 TRowEmpty) }
+	| LBRACE ty_row RBRACE                          { TRecord (ty_row_extend $2 TRowEmpty) }
 	
 ty_comma_list:
 	| ty                        { [$1] }

@@ -99,6 +99,18 @@ let test_cases = [
 	("fun r -> choose({x = zero | r}, {x = one, x = true})", OK "{x : bool} -> {x : int, x : bool}");
 	("fun r -> choose(r, {x = one, x = true})", OK "{x : int, x : bool} -> {x : int, x : bool}");
 	("fun r -> choose({x = zero | r}, {x = true | r})", error "cannot unify types int and bool");
+	("fun r s -> " ^
+	 "choose({b = true, a = one, c = zero, b = half | r}, {b = false, c = one, d = half | s})",
+		OK ("forall[a] ({d : float | a}, {a : int, b : float | a}) -> " ^
+		    "{a : int, b : bool, b : float, c : int, d : float | a}"));
+	("fun r s -> choose({b = true, a = one, c = zero, b = half | r}, {b = false, c = one | s})",
+		OK "forall[a] ({a}, {a : int, b : float | a}) -> {a : int, b : bool, b : float, c : int | a}");
+	("fun r s -> choose({b = true, c = zero | r}, {b = false, c = one, d = half | s})",
+		OK "forall[a] ({d : float | a}, {a}) -> {b : bool, c : int, d : float | a}");
+	("fun r s -> " ^
+	 "choose({b = true, a = one, c = one, b = half | r}, {b = false, c = one, a = one, b = half | s})",
+		OK "forall[a] ({a}, {a}) -> {a : int, b : bool, b : float, c : int | a}");
+	("fun r -> {x = r | r}", OK "forall[a] {a} -> {x : {a} | a}");
 	]
 
 

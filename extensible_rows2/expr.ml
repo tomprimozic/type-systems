@@ -1,13 +1,16 @@
 type name = string
 
+let compare_label label1 label2 =
+	let compare_length = compare (String.length label1) (String.length label2) in
+	if compare_length = 0 then
+		String.compare label1 label2
+	else compare_length
+
+
 module LabelMap = Map.Make(
 	struct
 		type t = name
-		let compare label1 label2 =
-			let compare_length = compare (String.length label1) (String.length label2) in
-			if compare_length = 0 then
-				String.compare label1 label2
-			else compare_length
+		let compare = compare_label
 	end)
 
 type expr =
@@ -16,8 +19,7 @@ type expr =
 	| Fun of name list * expr               (* abstraction *)
 	| Let of name * expr * expr             (* let *)
 	| RecordSelect of expr * name           (* selecting value of label: `r.a` *)
-	| RecordExtend of (expr list) LabelMap.t * expr
-					(* extending a record: `{a = 1, b = 2 | r}` *)
+	| RecordExtend of (expr list) LabelMap.t * expr    (* extending a record: `{a = 1, b = 2 | r}` *)
 	| RecordRestrict of expr * name         (* deleting a label: `{r - a}` *)
 	| RecordEmpty                           (* empty record: `{}` *)
 
@@ -31,8 +33,7 @@ type ty =
 	| TVar of tvar ref                  (* type variable *)
 	| TRecord of row                    (* record type: `{<...>}` *)
 	| TRowEmpty                         (* empty row: `<>` *)
-	| TRowExtend of (ty list) LabelMap.t * row
-					(* row extension: `<a : _ , b : _ | ...>` *)
+	| TRowExtend of (ty list) LabelMap.t * row    (* row extension: `<a : _ , b : _ | ...>` *)
 
 and row = ty    (* the kind of rows - empty row, row variable, or row extension *)
 
@@ -40,6 +41,48 @@ and tvar =
 	| Unbound of id * level
 	| Link of ty
 	| Generic of id
+
+
+let rec real_ty = function
+	| TVar {contents = Link ty} -> real_ty ty
+	| ty -> ty
+
+let merge_label_maps label_map1 label_map2 =
+	LabelMap.merge
+		(fun label maybe_ty_list1 maybe_ty_list2 ->
+			match maybe_ty_list1, maybe_ty_list2 with
+				| None, None -> assert false
+				| None, (Some ty_list2) -> Some ty_list2
+				| (Some ty_list1), None -> Some ty_list1
+				| (Some ty_list1), (Some ty_list2) -> Some (ty_list1 @ ty_list2))
+		label_map1 label_map2
+
+(* Returns a label map with all field types and the type of the "rest",
+   which is either a type var or an empty row. *)
+let rec match_row_ty = function
+	| TRowExtend(label_ty_map, rest_ty) -> begin
+			match match_row_ty rest_ty with
+				| (rest_label_ty_map, rest_ty) when LabelMap.is_empty rest_label_ty_map ->
+						(label_ty_map, rest_ty)
+				| (rest_label_ty_map, rest_ty) ->
+						(merge_label_maps label_ty_map rest_label_ty_map, rest_ty)
+		end
+	| TVar {contents = Link ty} -> match_row_ty ty
+	| TVar _ as var -> (LabelMap.empty, var)
+	| TRowEmpty -> (LabelMap.empty, TRowEmpty)
+	| ty -> raise (Failure "not a row")
+
+(* Adds new bindings to a label map. Assumes all bindings (both
+   new and existing) are distinct. *)
+let add_distinct_labels label_el_map label_el_list =
+	List.fold_left
+		(fun label_el_map (label, el) ->
+			assert (not (LabelMap.mem label label_el_map)) ;
+			LabelMap.add label el label_el_map)
+	label_el_map label_el_list
+
+let label_map_from_list label_el_list =
+	add_distinct_labels LabelMap.empty label_el_list
 
 
 
@@ -117,7 +160,8 @@ let string_of_ty ty : string =
 		| TVar {contents = Link ty} -> f is_simple ty
 		| TRecord row_ty -> "{" ^ f false row_ty ^ "}"
 		| TRowEmpty -> ""
-		| TRowExtend(label_ty_map, rest_ty) ->
+		| TRowExtend _ as row_ty ->
+				let (label_ty_map, rest_ty) = match_row_ty row_ty in
 				let label_ty_str =
 					String.concat ", "
 						(List.map
@@ -126,14 +170,12 @@ let string_of_ty ty : string =
 									(List.map (fun ty -> label ^ " : " ^ f false ty) ty_list))
 							(LabelMap.bindings label_ty_map))
 				in
-				let rec g = function
-					| TVar {contents = Link ty} -> g ty
+				let rest_ty_str = match real_ty rest_ty with
 					| TRowEmpty -> ""
-					| TRowExtend _ -> raise (Failure "invalid type - tail of row cannot be another row")
+					| TRowExtend _ -> assert false
 					| other_ty -> " | " ^ f false other_ty
 				in
-				let rest_ty_str = g rest_ty in
-				"{" ^ label_ty_str ^ rest_ty_str ^ "}"
+				label_ty_str ^ rest_ty_str
 	in
 	let ty_str = f false ty in
 	if !count > 0 then
