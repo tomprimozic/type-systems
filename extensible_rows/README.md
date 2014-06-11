@@ -57,7 +57,8 @@ represented as a list of record/row extensions, whose order depends on programme
 and inner workings of the type inference algorithm. The unification procedure can rearrange
 fields as necessary, but records and record types can not be easily compared or canonically
 represented by strings. A better solution would be to gather all labels into a multi-map
-and use a specific sorting order for labels when representing rows as strings.
+and use a specific sorting order for labels when representing rows as strings (implemented in
+[**extensible_rows2**][5]).
 
 While this type system is simple to implement and use (for example, it is a part of the language
 [Elm][3]), it represents only one possibility for typing extensible records. Other
@@ -71,3 +72,4 @@ also include structural subtyping (as used for objects in OCaml and Go).
 [2]: https://github.com/tomprimozic/type-systems/commit/5c183a7866aa30f3350a4cab011e376d36dd385e
 [3]: http://elm-lang.org/learn/Records.elm
 [4]: https://ghc.haskell.org/trac/ghc/wiki/ExtensibleRecords
+[5]: https://github.com/tomprimozic/type-systems/tree/master/extensible_rows2

@@ -21,6 +21,9 @@ are minimal and contain code that is (hopefully) simple and clear.
     surprisingly useful, and was incorporated into the programming language
     [Elm](http://elm-lang.org/learn/Records.elm).
 
+-   [**extensible_rows2**](https://github.com/tomprimozic/type-systems/tree/master/extensible_rows2)
+    is an optimized implementation of **extensible_rows**.
+
 -   [**first_class_polymorphism**](https://github.com/tomprimozic/type-systems/tree/master/first_class_polymorphism)
     extends **algorithm_w** with type checking and partial type inference for first-class
     and higher-rank polymorphism, based on another one of Daan Leijen's [papers][hmf].
