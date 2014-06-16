@@ -49,6 +49,7 @@ let replace_ty_constants_with_vars var_name_list ty =
 		| TApp(ty, ty_arg_list) -> TApp(f ty, List.map f ty_arg_list)
 		| TArrow(param_ty_list, return_ty) -> TArrow(List.map f param_ty_list, f return_ty)
 		| TRecord row -> TRecord (f row)
+		| TVariant row -> TVariant (f row)
 		| TRowEmpty -> ty
 		| TRowExtend(label_ty_map, row) ->
 				TRowExtend(LabelMap.map (List.map f) label_ty_map, f row)
@@ -58,7 +59,7 @@ let replace_ty_constants_with_vars var_name_list ty =
 %}
 
 %token <string> IDENT
-%token FUN LET IN FORALL
+%token FUN LET IN FORALL MATCH
 %token LPAREN RPAREN LBRACKET RBRACKET LBRACE RBRACE
 %token ARROW EQUALS COMMA DOT MINUS PIPE COLON
 %token EOF
@@ -85,6 +86,11 @@ expr:
 	| simple_expr                         { $1 }
 	| LET IDENT EQUALS expr IN expr       { Let($2, $4, $6) }
 	| FUN ident_list ARROW expr           { Fun($2, $4) }
+	| COLON IDENT simple_expr             { Variant($2, $3) }
+	| MATCH expr LBRACE match_case_list RBRACE      {
+			let cases, maybe_default_case = $4 in
+			Case($2, cases, maybe_default_case)
+		}
 
 simple_expr:
 	| IDENT                                             { Var $1 }
@@ -109,6 +115,20 @@ record_label_expr_list:
 	| IDENT EQUALS expr                               { [($1, $3)] }
 	| record_label_expr_list COMMA IDENT EQUALS expr  { ($3, $5) :: $1 }
 
+match_case_list:
+	| match_case                        { ([$1], None) }
+	| match_default_case                { ([], Some $1) }
+	| match_case PIPE match_case_list   {
+			let cases, maybe_default_case = $3 in
+			($1 :: cases, maybe_default_case)
+		}
+
+match_case:
+	| COLON IDENT IDENT ARROW expr     { ($2, $3, $5) }
+
+match_default_case:
+	| IDENT ARROW expr     { ($1, $3) }
+
 ty_forall:
 	| ty                                        { $1 }
 	| FORALL LBRACKET ident_list RBRACKET ty    { replace_ty_constants_with_vars $3 $5 }
@@ -127,6 +147,10 @@ simple_ty:
 	| LBRACE IDENT RBRACE                           { TRecord (TConst $2) }
 	| LBRACE ty_row PIPE ty RBRACE                  { TRecord (ty_row_extend $2 $4) }
 	| LBRACE ty_row RBRACE                          { TRecord (ty_row_extend $2 TRowEmpty) }
+	| LBRACKET RBRACKET                             { TVariant TRowEmpty }
+	| LBRACKET IDENT RBRACKET                       { TVariant (TConst $2) }
+	| LBRACKET ty_row PIPE ty RBRACKET              { TVariant (ty_row_extend $2 $4) }
+	| LBRACKET ty_row RBRACKET                      { TVariant (ty_row_extend $2 TRowEmpty) }
 	
 ty_comma_list:
 	| ty                        { [$1] }

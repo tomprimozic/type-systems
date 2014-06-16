@@ -22,7 +22,8 @@ let core =
 	assume "zero" "int" ;
 	assume "half" "float" ;
 	assume "succ" "int -> int" ;
-	assume "plus" "(int, int) -> inc" ;
+	assume "plus" "(int, int) -> int" ;
+	assume "minus" "(int, int) -> int" ;
 	assume "eq" "forall[a] (a, a) -> bool" ;
 	assume "eq_curry" "forall[a] a -> a -> bool" ;
 	assume "not" "bool -> bool" ;
@@ -38,5 +39,7 @@ let core =
 	assume "apply_curry" "forall[a b] (a -> b) -> a -> b" ;
 	assume "choose" "forall[a] (a, a) -> a" ;
 	assume "choose_curry" "forall[a] a -> a -> a" ;
+	assume "fix" "forall[a b] ((a -> b) -> a -> b) -> a -> b" ;
+	assume "if" "forall[a] (bool, a, a) -> a" ;
 
 	!core_ref

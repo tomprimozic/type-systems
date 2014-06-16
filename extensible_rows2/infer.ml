@@ -49,6 +49,7 @@ let occurs_check_adjust_levels tvar_id tvar_level ty =
 				List.iter f param_ty_list ;
 				f return_ty
 		| TRecord row -> f row
+		| TVariant row -> f row
 		| TRowExtend(label_ty_map, rest_ty) ->
 				LabelMap.iter (fun _ -> List.iter f) label_ty_map ;
 				f rest_ty
@@ -75,6 +76,7 @@ let rec unify ty1 ty2 =
 				occurs_check_adjust_levels id level ty ;
 				tvar := Link ty
 		| TRecord row1, TRecord row2 -> unify row1 row2
+		| TVariant row1, TVariant row2 -> unify row1 row2
 		| TRowEmpty, TRowEmpty -> ()
 		| (TRowExtend _ as row1), (TRowExtend _ as row2) -> unify_rows row1 row2
 		| TRowEmpty, TRowExtend(label_ty_map, _) | TRowExtend(label_ty_map, _), TRowEmpty ->
@@ -150,6 +152,7 @@ let rec generalize level = function
 			TArrow(List.map (generalize level) param_ty_list, generalize level return_ty)
 	| TVar {contents = Link ty} -> generalize level ty
 	| TRecord row -> TRecord (generalize level row)
+	| TVariant row -> TVariant (generalize level row)
 	| TRowExtend(label_ty_map, rest_ty) ->
 			TRowExtend(LabelMap.map (List.map (generalize level)) label_ty_map, generalize level rest_ty)
 	| TVar {contents = Generic _} | TVar {contents = Unbound _} | TConst _ | TRowEmpty as ty -> ty
@@ -173,6 +176,7 @@ let instantiate level ty =
 		| TArrow(param_ty_list, return_ty) ->
 				TArrow(List.map f param_ty_list, f return_ty)
 		| TRecord row -> TRecord (f row)
+		| TVariant row -> TVariant (f row)
 		| TRowEmpty -> ty
 		| TRowExtend(label_ty_map, rest_ty) ->
 				TRowExtend(LabelMap.map (List.map f) label_ty_map, f rest_ty)
@@ -256,3 +260,34 @@ let rec infer env level = function
 			let rest_row_ty = new_var level in
 			unify (TRecord rest_row_ty) (infer env level record_expr) ;
 			TRecord (TRowExtend(label_ty_map, rest_row_ty))
+	| Variant(label, expr) ->
+			(* inlined code for Call of function with type "forall [a r] a -> [label : a | r]" *)
+			let rest_row_ty = new_var level in
+			let variant_ty = new_var level in
+			let param_ty = variant_ty in
+			let return_ty = TVariant (TRowExtend(LabelMap.singleton label [variant_ty], rest_row_ty)) in
+			unify param_ty (infer env level expr) ;
+			return_ty
+	| Case(expr, cases, None) ->
+			let return_ty = new_var level in
+			let expr_ty = infer env level expr in
+			let cases_row = infer_cases env level return_ty TRowEmpty cases in
+			unify expr_ty (TVariant cases_row) ;
+			return_ty
+	| Case(expr, cases, Some (default_var_name, default_expr)) ->
+			let default_variant_ty = new_var level in
+			let return_ty =
+				infer (Env.extend env default_var_name (TVariant default_variant_ty)) level default_expr
+			in
+			let expr_ty = infer env level expr in
+			let cases_row = infer_cases env level return_ty default_variant_ty cases in
+			unify expr_ty (TVariant cases_row) ;
+			return_ty
+
+and infer_cases env level return_ty rest_row_ty cases = match cases with
+	| [] -> rest_row_ty
+	| (label, var_name, expr) :: other_cases ->
+			let variant_ty = new_var level in
+			unify return_ty (infer (Env.extend env var_name variant_ty) level expr) ;
+			let other_cases_row = infer_cases env level return_ty rest_row_ty other_cases in
+			TRowExtend(LabelMap.singleton label [variant_ty], other_cases_row)

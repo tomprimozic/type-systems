@@ -22,6 +22,16 @@ type expr =
 	| RecordExtend of (expr list) LabelMap.t * expr    (* extending a record: `{a = 1, b = 2 | r}` *)
 	| RecordRestrict of expr * name         (* deleting a label: `{r - a}` *)
 	| RecordEmpty                           (* empty record: `{}` *)
+	| Variant of name * expr                (* new variant value: `:X a` *)
+	| Case of expr * (name * name * expr) list * (name * expr) option
+			(* a pattern-matching case expression:
+					match e {
+							:X a -> expr1
+						| :Y b -> expr2
+						...
+						| z -> default_expr (optional)
+					}
+			*)
 
 type id = int
 type level = int
@@ -31,7 +41,8 @@ type ty =
 	| TApp of ty * ty list              (* type application: `list[int]` *)
 	| TArrow of ty list * ty            (* function type: `(int, int) -> int` *)
 	| TVar of tvar ref                  (* type variable *)
-	| TRecord of row                    (* record type: `{<...>}` *)
+	| TRecord of row                    (* record type: `{...}` *)
+	| TVariant of row                   (* variant type: `[...]` *)
 	| TRowEmpty                         (* empty row: `<>` *)
 	| TRowExtend of (ty list) LabelMap.t * row    (* row extension: `<a : _ , b : _ | ...>` *)
 
@@ -118,6 +129,22 @@ let string_of_expr expr : string =
 					| expr -> " | " ^ f false expr
 				in
 				"{" ^ label_expr_str ^ rest_expr_str ^ "}"
+		| Variant(label, value) ->
+				let variant_str = ":" ^ label ^ " " ^ f true value in
+				if is_simple then "(" ^ variant_str ^ ")" else variant_str
+		| Case(expr, cases, maybe_default_case) ->
+				let cases_str_list = List.map
+					(fun (label, var_name, expr) ->
+						"| :" ^ label ^ " " ^ var_name ^ " -> " ^ f false expr)
+					cases
+				in
+				let all_cases_str = match (cases_str_list, maybe_default_case) with
+					| ([], Some (var_name, expr)) -> var_name ^ " -> " ^ f false expr
+					| (cases_str_list, None) -> String.concat "" cases_str_list
+					| (cases_str_list, Some (var_name, expr)) ->
+							String.concat "" cases_str_list ^ " | " ^ var_name ^ " -> " ^ f false expr
+				in
+				"match " ^ f false expr ^ " { " ^ all_cases_str ^ " } "
 	in
 	f false expr
 
@@ -159,6 +186,7 @@ let string_of_ty ty : string =
 		| TVar {contents = Unbound(id, _)} -> "_" ^ string_of_int id
 		| TVar {contents = Link ty} -> f is_simple ty
 		| TRecord row_ty -> "{" ^ f false row_ty ^ "}"
+		| TVariant row_ty -> "[" ^ f false row_ty ^ "]"
 		| TRowEmpty -> ""
 		| TRowExtend _ as row_ty ->
 				let (label_ty_map, rest_ty) = match_row_ty row_ty in

@@ -56,6 +56,11 @@ let test_cases = [
 	("let const = fun x -> fun y -> x in const", OK "forall[a b] a -> b -> a");
 	("let apply = fun f x -> f(x) in apply", OK "forall[a b] (a -> b, a) -> b");
 	("let apply_curry = fun f -> fun x -> f(x) in apply_curry", OK "forall[a b] (a -> b) -> a -> b");
+	("let fib1 = fun fib -> fun n -> " ^
+	 "if(eq(n, one), one, " ^
+	 "if(eq(n, zero), one, " ^
+	 "plus(fib(minus(n, one)), fib(minus(n, succ(one)))))) in " ^
+	 "fix(fib1)", OK "int -> int");
 
 	(* records *)
 	("{}", OK "{}");
@@ -111,6 +116,33 @@ let test_cases = [
 	 "choose({b = true, a = one, c = one, b = half | r}, {b = false, c = one, a = one, b = half | s})",
 		OK "forall[a] ({a}, {a}) -> {a : int, b : bool, b : float, c : int | a}");
 	("fun r -> {x = r | r}", OK "forall[a] {a} -> {x : {a} | a}");
+
+	(* variants *)
+	(":X one", OK "forall[a] [X : int | a]");
+	("choose(choose(:x one, :Y true), choose(:X half, :y nil))",
+		OK "forall[a b] [X : float, Y : bool, x : int, y : list[a] | b]");
+	("choose(:X one, :X true)", error "cannot unify types int and bool");
+	("choose(:X {x = one, y = false}, :Y {w = half})",
+		OK "forall[a] [X : {x : int, y : bool}, Y : {w : float} | a]");
+	("let e = choose(choose(:x one, :Y true), choose(:X half, :y nil)) in " ^
+	 "match e { :x i -> i | :Y y -> zero}", error "row does not contain label X");
+	("fun x y -> match x {:a i -> one | :b i -> zero | :c i -> y}",
+		OK "forall [a b c] ([a : a, b : b, c : c], int) -> int");
+	("fun a -> match a {:X i -> i | r -> one}", OK "forall[a] [X : int | a] -> int");
+	("let f = fun m -> match m {:y a -> one | :Y b -> zero | :z z -> zero} in " ^
+	 "fun e -> match e { :x i -> i | :X f -> one | r -> f(r)}",
+	 OK "forall[a b c d] [X : a, Y : b, x : int, y : c, z : d] -> int");
+	("let e = choose(choose(:x one, :Y true), choose(:X half, :y nil)) in " ^
+	 "let f = fun m -> match m {:y a -> one | :Y b -> zero | :z z -> zero} in " ^
+	 "match e { :x i -> i | :X f -> one | r -> f(r)}", OK "int");
+	("fun e -> match e {:X a -> one | :X i -> i}", OK "forall[a] [X : a, X : int] -> int");
+	("let f = fun g -> fun e -> match e { :x i -> i | :Y a -> one | r -> g(r)} in " ^
+	 "let g = fun s -> match s {:x j -> head(j) | :X a -> zero} in " ^
+	 "f(g)", OK "forall[a b] [X : a, Y : b, x : int, x : list[int]] -> int");
+	("fun e -> match e { :X a -> plus(a.x, one) }", OK "forall[a] [X : {x : int | a}] -> int");
+	("let count1 = fun count -> fun x -> " ^
+	 " match x {:Cons a -> plus(one, count(a.tail)) | :Nil _ -> zero} in " ^
+	 "fix(count1)", error "recursive types");
 	]
 
 
